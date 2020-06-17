@@ -40,16 +40,7 @@ namespace CollabVM {
 #endif
 #endif
 
-// TODO:
-// This may be nice to place outside of here.
-#include <boost/beast/core.hpp>
-#include <boost/beast/websocket.hpp>
-#include <boost/asio/dispatch.hpp>
-#include <boost/asio/spawn.hpp>
-#include <boost/asio/strand.hpp>
+#include <boost/asio.hpp>
 
-namespace beast = boost::beast;
-namespace http = beast::http;
-namespace websocket = beast::websocket;
 namespace net = boost::asio;
 using tcp = net::ip::tcp;

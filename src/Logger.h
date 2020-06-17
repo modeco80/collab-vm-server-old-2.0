@@ -109,5 +109,4 @@ namespace CollabVM {
 		std::mutex mutex;
 	};
 
-	extern Logger mainLogger;
 }
