@@ -26,7 +26,6 @@ namespace CollabVM {
 
 		virtual void OnWebsocketClose(handle_type handle) = 0;
 
-
 	protected:
 
 		server_type* server;

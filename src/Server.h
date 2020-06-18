@@ -9,7 +9,7 @@ namespace CollabVM {
 	enum class ActionType {
 		AddConnection,
 		RemoveConnection,
-		IpDataTimeout
+		Message
 	};
 
 	struct IAction {
@@ -35,6 +35,16 @@ namespace CollabVM {
 
 		RemoveConnectionAction(WebsocketServer::connection_type con) 
 			: IAction(ActionType::RemoveConnection), conPtr(con) {
+		
+		}
+	};
+
+	struct MessageAction : public IAction {
+		WebsocketServer::connection_type conPtr;
+		WebsocketServer::message_type message;
+
+		MessageAction(WebsocketServer::connection_type con, WebsocketServer::message_type msg)
+			: IAction(ActionType::Message), conPtr(con), message(msg) {
 		
 		}
 	};
@@ -65,6 +75,7 @@ namespace CollabVM {
 
 		void CleanupIPData();
 
+		// Shorthand
 		inline void AddWork(IAction* action) {
 			if(action) {
 				work.push_back(action);

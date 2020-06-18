@@ -57,8 +57,6 @@ namespace CollabVM {
 	}
 
 	void Server::OnWebsocketOpen(base::handle_type userHdl) {
-		logger.info("OnWebsocketOpen() called");
-		
 		std::error_code ec;
 		auto conPtr = server->get_con_from_hdl(userHdl, ec);
 
@@ -69,11 +67,19 @@ namespace CollabVM {
 	}
 
 	void Server::OnWebsocketMessage(base::handle_type userHdl, base::message_type message) {
-		logger.info("OnWebsocketMessage() called");
+		std::error_code ec;
+		auto conPtr = server->get_con_from_hdl(userHdl, ec);
+
+		if(ec)
+			return;
+
+		// exclude text messages from work,
+		// we don't use those 
+		if(message->get_opcode() == websocketpp::frame::opcode::binary)
+			AddWork(new MessageAction(conPtr, message));
 	}
 
 	void Server::OnWebsocketClose(base::handle_type userHdl) {
-		logger.info("OnWebsocketClose() called");
 		std::error_code ec;
 		auto conPtr = server->get_con_from_hdl(userHdl, ec);
 
@@ -202,6 +208,10 @@ namespace CollabVM {
 						delete it->second;
 
 					users.erase(it);
+				} break;
+
+				case ActionType::Message: {
+					// TODO
 				} break;
 
 				default:
