@@ -12,6 +12,7 @@ namespace CollabVM {
 		typedef websocketpp::server<websocketpp::config::asio> server_type;
 		typedef websocketpp::connection_hdl handle_type;
 		typedef server_type::message_ptr message_type;
+		typedef server_type::connection_ptr connection_type;
 
 		void Start(net::io_service& ioc, uint16 port);
 

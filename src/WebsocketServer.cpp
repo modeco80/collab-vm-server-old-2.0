@@ -32,6 +32,7 @@ namespace CollabVM {
 		server->start_accept(ec);
 		if(ec) {
 			wsLogger.error("Error starting accept: ", ec.message());
+			return;
 		}
 
 	}

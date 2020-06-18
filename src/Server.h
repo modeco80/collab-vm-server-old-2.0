@@ -1,5 +1,6 @@
 #pragma once
 #include "Common.h"
+#include "User.h"
 #include "WebsocketServer.h"
 #include "Logger.h"
 
@@ -21,9 +22,19 @@ namespace CollabVM {
 	};
 
 	struct AddConnectionAction : public IAction {
+		WebsocketServer::connection_type conPtr;
+
+		AddConnectionAction(WebsocketServer::connection_type con) 
+			: IAction(ActionType::AddConnection), conPtr(con) {
 		
-		AddConnectionAction() 
-			: IAction(ActionType::AddConnection) {
+		}
+	};	
+	
+	struct RemoveConnectionAction : public IAction {
+		WebsocketServer::connection_type conPtr;
+
+		RemoveConnectionAction(WebsocketServer::connection_type con) 
+			: IAction(ActionType::RemoveConnection), conPtr(con) {
 		
 		}
 	};
@@ -48,6 +59,19 @@ namespace CollabVM {
 	private:
 		void ProcessActions();
 
+		IPData* FindIPData(net::ip::address& address);
+
+		void CreateIPData(net::ip::address& address);
+
+		void CleanupIPData();
+
+		inline void AddWork(IAction* action) {
+			if(action) {
+				work.push_back(action);
+				workReady.notify_one();
+			}
+		}
+
 		// processing thread
 		std::thread processingThread;
 
@@ -56,12 +80,24 @@ namespace CollabVM {
 		// can modify to it's own will
 		std::mutex workLock;
 
+		std::condition_variable workReady;
+
 		bool stopProcessing = false;
 
 		// deque of work
 		// locked by workLock
-		std::deque<IAction*> work;		
+		std::deque<IAction*> work;
 
+		
+		std::mutex ipDataLock;
+
+		std::map<uint64, IPData*> ipv4data;
+		std::map<std::array<byte, 16>, IPData*> ipv6data;
+
+		
+		std::mutex usersLock;
+
+		std::map<WebsocketServer::connection_type, User*> users;
 
 		Logger logger = Logger::GetLogger("CollabVMServer");
 	};
