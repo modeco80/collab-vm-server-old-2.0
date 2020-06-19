@@ -6,65 +6,71 @@
 
 namespace CollabVM {
 	
-	enum class ActionType {
+	enum class WorkType {
 		AddConnection,
 		RemoveConnection,
 		Message
 	};
 
-	struct IAction {
-		ActionType type;
+	struct IWork {
+		WorkType type;
 
-		IAction(ActionType t)
+		IWork(WorkType t)
 			: type(t) {
 		
 		}
 	};
 
-	struct AddConnectionAction : public IAction {
+	struct ConnectionAddWork : public IWork {
 		WebsocketServer::connection_type conPtr;
 
-		AddConnectionAction(WebsocketServer::connection_type con) 
-			: IAction(ActionType::AddConnection), conPtr(con) {
+		ConnectionAddWork(WebsocketServer::connection_type con) 
+			: IWork(WorkType::AddConnection), conPtr(con) {
 		
 		}
 	};	
 	
-	struct RemoveConnectionAction : public IAction {
+	struct ConnectionRemoveWork : public IWork {
 		WebsocketServer::connection_type conPtr;
 
-		RemoveConnectionAction(WebsocketServer::connection_type con) 
-			: IAction(ActionType::RemoveConnection), conPtr(con) {
+		ConnectionRemoveWork(WebsocketServer::connection_type con) 
+			: IWork(WorkType::RemoveConnection), conPtr(con) {
 		
 		}
 	};
 
-	struct MessageAction : public IAction {
+	struct WebsocketMessageWork : public IWork {
 		WebsocketServer::connection_type conPtr;
 		WebsocketServer::message_type message;
 
-		MessageAction(WebsocketServer::connection_type con, WebsocketServer::message_type msg)
-			: IAction(ActionType::Message), conPtr(con), message(msg) {
+		WebsocketMessageWork(WebsocketServer::connection_type con, WebsocketServer::message_type msg)
+			: IWork(WorkType::Message), conPtr(con), message(msg) {
 		
 		}
 	};
 
 	struct Server : public WebsocketServer {
-		typedef WebsocketServer base;
+		typedef WebsocketServer BaseServer;
+
+		inline Server(net::io_service& ioc)
+			: BaseServer(ioc),
+			IPDataCleanupTimer(ioc) {
+			
+		}
 
 		~Server();
 
-		void Start(net::io_service& ioc, uint16 port);
+		void Start(uint16 port);
 
 		void Stop();
 
-		bool OnWebsocketValidate(base::handle_type userHdl);
+		bool OnWebsocketValidate(BaseServer::handle_type userHdl);
 
-		void OnWebsocketOpen(base::handle_type userHdl);
+		void OnWebsocketOpen(BaseServer::handle_type userHdl);
 
-		void OnWebsocketMessage(base::handle_type userHdl, base::message_type message);
+		void OnWebsocketMessage(BaseServer::handle_type userHdl, BaseServer::message_type message);
 
-		void OnWebsocketClose(base::handle_type userHdl);
+		void OnWebsocketClose(BaseServer::handle_type userHdl);
 
 	private:
 		void ProcessActions();
@@ -75,38 +81,61 @@ namespace CollabVM {
 
 		void CleanupIPData();
 
-		// Shorthand
-		inline void AddWork(IAction* action) {
+		// Shorthand to add work to the processing queue
+		template<typename TAction>
+		inline void AddWork(TAction* action) {
+			static_assert(std::is_base_of<IWork, TAction>::value, "TAction doesn't inherit from IAction!");
+
+			// Only add action to the work queue
 			if(action) {
 				work.push_back(action);
-				workReady.notify_one();
+				WorkReady.notify_one();
 			}
 		}
 
+		inline void StartIPDataTimer() {
+			IPDataCleanupTimer.expires_after(net::steady_timer::duration(IPDataTimeout));
+			IPDataCleanupTimer.async_wait(std::bind(&Server::CleanupIPData, this));
+		}
+
+		// TODO figure out how to make these constexpr
+
+		const std::chrono::seconds IPDataTimeout = std::chrono::seconds(5);
+
+		// Timeout in seconds of when a user will be disconnected.
+		// TODO: Instead of using a special `nop` instruction,
+		// use the built-in Websocket ping frames.
+		const std::chrono::seconds PingTimeout = std::chrono::seconds(15);
+
 		// processing thread
-		std::thread processingThread;
+		std::thread WorkThread;
 
 		// mutex locking work
 		// if locked by thread, thread
 		// can modify to it's own will
-		std::mutex workLock;
+		std::mutex WorkLock;
 
-		std::condition_variable workReady;
+		std::condition_variable WorkReady;
 
-		bool stopProcessing = false;
+		bool StopWorking = false;
 
 		// deque of work
 		// locked by workLock
-		std::deque<IAction*> work;
+		std::deque<IWork*> work;
 
 		
-		std::mutex ipDataLock;
+		std::mutex IPDataLock;
 
+		net::steady_timer IPDataCleanupTimer;
+
+		// IPv4 IPData
 		std::map<uint64, IPData*> ipv4data;
+		
+		// IPv6 IPData
 		std::map<std::array<byte, 16>, IPData*> ipv6data;
 
 		
-		std::mutex usersLock;
+		std::mutex UsersLock;
 
 		std::map<WebsocketServer::connection_type, User*> users;
 

@@ -14,7 +14,12 @@ namespace CollabVM {
 		typedef server_type::message_ptr message_type;
 		typedef server_type::connection_ptr connection_type;
 
-		void Start(net::io_service& ioc, uint16 port);
+		inline WebsocketServer(net::io_service& ioc)
+			: io_service(&ioc) {
+			
+		}
+
+		void Start(uint16 port);
 
 		void Stop();
 
@@ -28,7 +33,10 @@ namespace CollabVM {
 
 	protected:
 
-		server_type* server;
+		server_type* ws_server;
+
+		net::io_service* io_service;
+
 		std::thread* server_thread;
 
 	private:

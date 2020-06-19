@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
 
 	work = new net::io_service::work(ioc);
 
-	server = new Server();
+	server = new Server(ioc);
 
 	// TODO: add code to allow safe breaking
 
@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
 	});
 
 	Worker([]() {
-		server->Start(ioc, port);
+		server->Start(port);
 	});
 
 	thread.join();

@@ -2,35 +2,53 @@
 #include "User.h"
 
 namespace CollabVM {
-
+	
 	Server::~Server() {
+		IPDataCleanupTimer.cancel();
 	}
 
-	void Server::Start(net::io_service& ioc, uint16 port) {
+	void Server::Start(uint16 port) {
 		logger.verbose("Starting processing thread before WebSockets");
+		WorkThread = std::thread(&Server::ProcessActions, this);
 
-		processingThread = std::thread(&Server::ProcessActions, this);
+		BaseServer::Start(port);
+		
+		StartIPDataTimer();
 
-		base::Start(ioc, port);
-
-		server->run();
-
-		processingThread.join();
+		// Start the WebSocket server loop and wait for the processing thread to end
+		ws_server->run();
+		WorkThread.join();
 	}
 
 	void Server::Stop() {
-		stopProcessing = true;
-		base::Stop();
+		StopWorking = true;
+		BaseServer::Stop();
+
+		// clean up everything in the server we can,
+		// even if we don't have to clean it up
+		std::lock_guard<std::mutex> ulock(UsersLock);
+		std::lock_guard<std::mutex> ilock(IPDataLock);
+
+		for(auto& ip : ipv4data)
+			if(ip.second)
+				delete ip.second;
+
+		for(auto& ip : ipv6data)
+			if(ip.second)
+				delete ip.second;
+
+		for(auto& user : users)
+			if(user.second)
+				delete user.second;
 	}
 
 	
-	bool Server::OnWebsocketValidate(base::handle_type userHdl) {
+	bool Server::OnWebsocketValidate(BaseServer::handle_type userHdl) {
 		// TODO: Implement connection limit & soft-bans
 		// (shouldn't be hard)
-		logger.info("OnWebsocketValidate() called");
 
 		std::error_code ec;
-		auto conPtr = server->get_con_from_hdl(userHdl, ec);
+		auto conPtr = ws_server->get_con_from_hdl(userHdl, ec);
 
 		if(ec)
 			return false;
@@ -44,11 +62,13 @@ namespace CollabVM {
 				auto endpoint = conPtr->get_raw_socket().remote_endpoint();
 				auto addr = endpoint.address();
 
+
 				if(FindIPData(addr) == nullptr) {
 					CreateIPData(addr);
 				}
-				
-				FindIPData(addr)->connection_count++;
+				auto data = FindIPData(addr);
+
+				data->connection_count++;
 				return true;
 			}
 		}
@@ -56,19 +76,19 @@ namespace CollabVM {
 		return false;
 	}
 
-	void Server::OnWebsocketOpen(base::handle_type userHdl) {
+	void Server::OnWebsocketOpen(BaseServer::handle_type userHdl) {
 		std::error_code ec;
-		auto conPtr = server->get_con_from_hdl(userHdl, ec);
+		auto conPtr = ws_server->get_con_from_hdl(userHdl, ec);
 
 		if(ec)
 			return;
 
-		AddWork(new AddConnectionAction(conPtr));
+		AddWork(new ConnectionAddWork(conPtr));
 	}
 
-	void Server::OnWebsocketMessage(base::handle_type userHdl, base::message_type message) {
+	void Server::OnWebsocketMessage(BaseServer::handle_type userHdl, BaseServer::message_type message) {
 		std::error_code ec;
-		auto conPtr = server->get_con_from_hdl(userHdl, ec);
+		auto conPtr = ws_server->get_con_from_hdl(userHdl, ec);
 
 		if(ec)
 			return;
@@ -76,22 +96,22 @@ namespace CollabVM {
 		// exclude text messages from work,
 		// we don't use those 
 		if(message->get_opcode() == websocketpp::frame::opcode::binary)
-			AddWork(new MessageAction(conPtr, message));
+			AddWork(new WebsocketMessageWork(conPtr, message));
 	}
 
-	void Server::OnWebsocketClose(base::handle_type userHdl) {
+	void Server::OnWebsocketClose(BaseServer::handle_type userHdl) {
 		std::error_code ec;
-		auto conPtr = server->get_con_from_hdl(userHdl, ec);
+		auto conPtr = ws_server->get_con_from_hdl(userHdl, ec);
 
 		if(ec)
 			return;
 
 		
-		AddWork(new RemoveConnectionAction(conPtr));
+		AddWork(new ConnectionRemoveWork(conPtr));
 	}
 
 	IPData* Server::FindIPData(net::ip::address& address) {
-		std::lock_guard<std::mutex> lock(ipDataLock);
+		std::lock_guard<std::mutex> lock(IPDataLock);
 
 		if(address.is_v4()) {
 			auto v4addr = address.to_v4();
@@ -118,7 +138,7 @@ namespace CollabVM {
 	}
 
 	void Server::CreateIPData(net::ip::address& address) {
-		std::lock_guard<std::mutex> lock(ipDataLock);
+		std::lock_guard<std::mutex> lock(IPDataLock);
 
 		if(address.is_v4()) {
 			auto v4addr = address.to_v4();
@@ -138,62 +158,76 @@ namespace CollabVM {
 	}
 
 	void Server::CleanupIPData() {
-		std::lock_guard<std::mutex> lock(ipDataLock);
+		std::lock_guard<std::mutex> lock(IPDataLock);
 
-		for(auto& ip : ipv4data) {
-			IPData* ipData = ip.second;
+		auto ipv4it = ipv4data.begin();
+		while(ipv4it != ipv4data.end()) {
+			IPData* ipData = ipv4it->second;
 
 			if(ipData) {
 				if(ipData->SafeToDelete()) {
+					logger.verbose("Erasing IPData for ", ipData->str() , " @ ", &ipData);
+
 					auto addr = ipData->address;
 					delete ipData;
 					ipv4data.erase(ipv4data.find(addr.to_v4().to_uint()));
+					ipv4it = ipv4data.begin();
+					continue;
 				}
-			} else {
-				continue;
 			}
+			ipv4it++;
 		}
 
-		for(auto& ip : ipv6data) {
-			IPData* ipData = ip.second;
+		auto ipv6it = ipv6data.begin();
+		while(ipv6it != ipv6data.end()) {
+			IPData* ipData = ipv6it->second;
 
 			if(ipData) {
 				if(ipData->SafeToDelete()) {
+					logger.verbose("Erasing IPData for ", ipData->str() , " @ ", &ipData);
+
 					auto addr = ipData->address;
 					delete ipData;
 					ipv6data.erase(ipv6data.find(addr.to_v6().to_bytes()));
+					ipv6it = ipv6data.begin();
+					continue;
 				}
-			} else {
-				continue;
 			}
+			ipv6it++;
 		}
+
+		// Call StartIPDataTimer() again so we keep being called
+		StartIPDataTimer();
 	}
 
 	void Server::ProcessActions() {
 		logger.verbose("Processing thread started");
 
-		while(!stopProcessing) {
-			std::unique_lock<std::mutex> lock(workLock);
+		while(!StopWorking) {
+			std::unique_lock<std::mutex> lock(WorkLock);
+
+			if(StopWorking == true)
+				break;
 
 			while(work.empty())
-				workReady.wait(lock);
+				WorkReady.wait(lock);
 
-			IAction* action = work.front();
+			IWork* action = work.front();
 			work.pop_front();
 
 			switch(action->type) {
-				case ActionType::AddConnection: {
-					std::lock_guard<std::mutex> lock(usersLock);
-					AddConnectionAction* add = (AddConnectionAction*)action;
+				case WorkType::AddConnection: {
+					std::lock_guard<std::mutex> lock(UsersLock);
+					ConnectionAddWork* add = (ConnectionAddWork*)action;
 
 					IPData* data = FindIPData(add->conPtr->get_raw_socket().remote_endpoint().address());
 					users[add->conPtr] = new User(add->conPtr, data);
 					logger.info("User Connected (IP: ", data->str(), ")");
 				} break;
 
-				case ActionType::RemoveConnection: {
-					std::lock_guard<std::mutex> lock(usersLock);
-					RemoveConnectionAction* add = (RemoveConnectionAction*)action;
+				case WorkType::RemoveConnection: {
+					std::lock_guard<std::mutex> lock(UsersLock);
+					ConnectionRemoveWork* add = (ConnectionRemoveWork*)action;
 
 					auto it = users.find(add->conPtr);
 					
@@ -210,7 +244,7 @@ namespace CollabVM {
 					users.erase(it);
 				} break;
 
-				case ActionType::Message: {
+				case WorkType::Message: {
 					// TODO
 				} break;
 
