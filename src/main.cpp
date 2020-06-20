@@ -71,8 +71,6 @@ int main(int argc, char** argv) {
 
 	server = new Server(ioc);
 
-	// TODO: add code to allow safe breaking
-
 	std::thread thread([]() {
 		Worker([]() {
 			ioc.run();

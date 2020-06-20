@@ -15,7 +15,7 @@ namespace CollabVM {
 		
 		StartIPDataTimer();
 
-		// Start the WebSocket server loop and wait for the processing thread to end
+		// Start the WebSocket server loop and wait for the work thread to end
 		ws_server->run();
 		WorkThread.join();
 	}
@@ -219,8 +219,9 @@ namespace CollabVM {
 				case WorkType::AddConnection: {
 					std::lock_guard<std::mutex> lock(UsersLock);
 					ConnectionAddWork* add = (ConnectionAddWork*)action;
+					auto address = add->conPtr->get_raw_socket().remote_endpoint().address();
 
-					IPData* data = FindIPData(add->conPtr->get_raw_socket().remote_endpoint().address());
+					IPData* data = FindIPData(address);
 					users[add->conPtr] = new User(add->conPtr, data);
 					logger.info("User Connected (IP: ", data->str(), ")");
 				} break;
@@ -233,7 +234,7 @@ namespace CollabVM {
 					
 					IPData* data = FindIPData(it->second->ipData->address);
 
-					// decrement connection count
+					// decrement connection count in IPData
 					data->connection_count--;
 
 					logger.info("User Disconnect (IP: ", it->second->ipData->str(), ")");

@@ -82,13 +82,12 @@ namespace CollabVM {
 		void CleanupIPData();
 
 		// Shorthand to add work to the processing queue
-		template<typename TAction>
-		inline void AddWork(TAction* action) {
-			static_assert(std::is_base_of<IWork, TAction>::value, "TAction doesn't inherit from IAction!");
-
+		inline void AddWork(IWork* newWork) {
 			// Only add action to the work queue
-			if(action) {
-				work.push_back(action);
+			if(newWork) {
+				std::lock_guard<std::mutex> lock(WorkLock);
+
+				work.push_back((IWork*)newWork);
 				WorkReady.notify_one();
 			}
 		}
