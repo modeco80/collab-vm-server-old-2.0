@@ -46,13 +46,13 @@ namespace CollabVM {
 
 	struct User {
 
-		User(WebsocketServer::connection_type con, IPData* ipdata)
-			: conptr(con), ipData(ipdata) {
+		User(WebsocketServer::stream_type& con, IPData* ipdata)
+			: con(con), ipData(ipdata) {
 			type = UserType::Guest;
 		}
 
-		// Connection pointer
-		WebsocketServer::connection_type conptr;
+		// Connection stream
+		WebsocketServer::stream_type& con;
 
 
 		// IPData of the user.

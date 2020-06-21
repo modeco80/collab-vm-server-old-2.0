@@ -6,31 +6,42 @@ namespace CollabVM {
 
 	struct WebsocketServer {
 
-		typedef websocketpp::server<websocketpp::config::asio> server_type;
-		typedef websocketpp::connection_hdl handle_type;
-		typedef server_type::message_ptr message_type;
-		typedef server_type::connection_ptr connection_type;
+		typedef ws::stream<beast::tcp_stream> stream_type;
+		typedef beast::flat_buffer message_type;
+		typedef stream_type* handle_type;
 
 		inline WebsocketServer(net::io_service& ioc)
 			: io_service(&ioc) {
 			
 		}
 
-		void Start(uint16 port);
+		void Start(tcp::endpoint& ep);
 
 		void Stop();
 
-		virtual bool OnWebsocketValidate(handle_type handle) = 0;
-		
+		// Callbacks run on WS/ASIO thread
+
 		virtual void OnWebsocketOpen(handle_type handle) = 0;
 
 		virtual void OnWebsocketMessage(handle_type handle, message_type message) = 0;
 
 		virtual void OnWebsocketClose(handle_type handle) = 0;
 
+		// get stream from a handle
+		inline stream_type& GetStreamFromHandle(handle_type handle) {
+			if (handle)
+				return *handle;
+
+			throw std::runtime_error("Attempted to get a stream from null handle");
+		}
+
 	protected:
 
-		server_type* ws_server;
+		std::mutex connectionslock;
+
+		// all connections are kept here
+		// and managed by the internal code
+		std::vector<stream_type> connections;
 
 		net::io_service* io_service;
 

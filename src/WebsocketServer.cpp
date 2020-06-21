@@ -2,44 +2,45 @@
 
 namespace CollabVM {
 
-	void WebsocketServer::Start(uint16 port) {
+	// NOTE: This function isn't templated like ws_server_fast
+	// because we explicitly use the stream_type typedef
+	// .. so there doesn't need to be any other instanation.
+	inline void ConfigureStream(WebsocketServer::stream_type& stream) {
+		// Enable the WebSocket permessage deflate extension.
+	    ws::permessage_deflate pmd;
+		pmd.client_enable = true;
+		pmd.server_enable = true;
+		pmd.compLevel = 3;
+		stream.set_option(pmd);
+
+		stream.auto_fragment(false);
+	}
+
+	struct WSSession {
+	
+	private:
+		// pointer to server
+		// used for callbacks
+		WebsocketServer* server;
+	};
+
+	struct Listener {
+
+	private:
+		// pointer to server
+		WebsocketServer* server;
+	};
+
+	void WebsocketServer::Start(tcp::endpoint& ep) {
 		using namespace std::placeholders;
 
-		wsLogger.info("Starting server on 0.0.0.0:", port);
+		wsLogger.info("Starting server on ", ep.address().to_string() ,":", ep.port());
 
-		ws_server = new WebsocketServer::server_type();
-		
-		ws_server->init_asio(io_service);
-
-		// clear all debugging messages from websocketpp
-		ws_server->clear_access_channels(websocketpp::log::alevel::all);
-		ws_server->clear_error_channels(websocketpp::log::elevel::all);
-		
-		// set handlers
-		ws_server->set_validate_handler(std::bind(&WebsocketServer::OnWebsocketValidate, this, _1));
-		ws_server->set_open_handler(std::bind(&WebsocketServer::OnWebsocketOpen, this, _1));
-		ws_server->set_message_handler(std::bind(&WebsocketServer::OnWebsocketMessage, this, _1, _2));
-		ws_server->set_close_handler(std::bind(&WebsocketServer::OnWebsocketClose, this, _1));
-		
-		std::error_code ec;
-		ws_server->listen(port, ec);
-
-		if(ec) {
-			wsLogger.error("Error listening: ", ec.message());
-			return;
-		}
-
-		ws_server->start_accept(ec);
-		if(ec) {
-			wsLogger.error("Error starting accept: ", ec.message());
-			return;
-		}
 
 	}
 
 
 	void WebsocketServer::Stop() {
-		ws_server->stop();
 	}
 
 }

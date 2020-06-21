@@ -3,6 +3,8 @@
 #include <ctime>
 #include <iostream>
 #include <cstdint>
+#include <map>
+#include <deque>
 #include <vector>
 #include <mutex>
 #include <thread>
@@ -46,5 +48,8 @@ namespace CollabVM {
 
 namespace net = boost::asio;
 namespace beast = boost::beast;
+
+namespace http = beast::http;
+namespace ws = beast::websocket;
 
 using tcp = net::ip::tcp;

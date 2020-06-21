@@ -40,7 +40,7 @@ namespace CollabVM {
 	};
 
 	struct WebsocketMessageWork : public IWork {
-		WebsocketServer::connection_type conPtr;
+		WebsocketServer::stream_type s;
 		WebsocketServer::message_type message;
 
 		WebsocketMessageWork(WebsocketServer::connection_type con, WebsocketServer::message_type msg)
@@ -60,11 +60,9 @@ namespace CollabVM {
 
 		~Server();
 
-		void Start(uint16 port);
+		void Start(tcp::endpoint& ep);
 
 		void Stop();
-
-		bool OnWebsocketValidate(BaseServer::handle_type userHdl);
 
 		void OnWebsocketOpen(BaseServer::handle_type userHdl);
 
@@ -136,7 +134,8 @@ namespace CollabVM {
 		
 		std::mutex UsersLock;
 
-		std::map<WebsocketServer::connection_type, User*> users;
+		// maps handles of streams to users
+		std::map<WebsocketServer::handle_type, User*> users;
 
 		Logger logger = Logger::GetLogger("CollabVMServer");
 	};
