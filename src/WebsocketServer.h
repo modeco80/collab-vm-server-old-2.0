@@ -2,9 +2,6 @@
 #include "Common.h"
 #include "Logger.h"
 
-#include <websocketpp/config/asio_no_tls.hpp>
-#include <websocketpp/server.hpp>
-
 namespace CollabVM {
 
 	struct WebsocketServer {
@@ -36,8 +33,6 @@ namespace CollabVM {
 		server_type* ws_server;
 
 		net::io_service* io_service;
-
-		std::thread* server_thread;
 
 	private:
 		Logger wsLogger = Logger::GetLogger("WebSocketServer");

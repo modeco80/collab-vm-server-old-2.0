@@ -1,6 +1,3 @@
 [submodule "vendor/collab-vm-common"]
 	path = vendor/collab-vm-common
 	url = https://github.com/modeco80/collab-vm-common.git
-[submodule "vendor/websocketpp"]
-	path = vendor/websocketpp
-	url = https://github.com/zaphoyd/websocketpp
