@@ -47,21 +47,16 @@ namespace CollabVM {
 #endif
 
 	void Server::OnWebsocketOpen(BaseServer::handle_type handle) {
-		auto& session = GetSessionFromHandle(handle);
-
-		logger.info("OnWebsocketOpen()");
+		auto& session = WebsocketServer::GetSessionFromHandle(handle);
 	}
 
 	void Server::OnWebsocketMessage(BaseServer::handle_type handle, BaseServer::message_type message) {
-		auto& session = GetSessionFromHandle(handle);
-
+		auto& session = WebsocketServer::GetSessionFromHandle(handle);
 		logger.info("message: ", beast::buffers_to_string(message.message.data()));
 	}
 
 	void Server::OnWebsocketClose(BaseServer::handle_type handle) {
-		auto& session = GetSessionFromHandle(handle);
-
-		logger.info("OnWebsocketClose()");
+		auto& session = WebsocketServer::GetSessionFromHandle(handle);
 	}
 
 	IPData* Server::FindIPData(net::ip::address& address) {

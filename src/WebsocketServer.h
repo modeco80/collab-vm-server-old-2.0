@@ -7,8 +7,14 @@ namespace CollabVM {
 	struct WSSession;
 	struct Listener;
 
-	// wrapper over flat_buffer
+	// wrapper over flat_buffer that stores a bit more info about the message
+	// TODO: This should be passed by reference, and message should be a ref as well.
 	struct WSMessage {
+
+		~WSMessage() {
+			message.reserve(0);
+		}
+
 		bool binary;
 		beast::flat_buffer message;
 	};
@@ -45,8 +51,8 @@ namespace CollabVM {
 
 		virtual void OnWebsocketClose(handle_type handle) = 0;	
 		
-		// get session from a handle
-		inline WSSession& GetSessionFromHandle(handle_type handle) {
+		// get session from a handle (with sanity checking)
+		inline static WSSession& GetSessionFromHandle(handle_type handle) {
 			if (handle)
 				return *handle;
 
@@ -70,16 +76,19 @@ namespace CollabVM {
 		// all running sessions
 		std::vector<WSSession*> sessions;
 
+		// listener
 		Listener* listener;
 
-		// called when a session closes
+		// internal callback, 
+		// called when a session requests close
+		// frees said session
 		void OnSessionClose(WSSession* session);
 
 	private:
 		Logger wsLogger = Logger::GetLogger("WebSocketServer");
 	};
 
-
+	// WebSocket session
 	struct WSSession {
 	
 		explicit WSSession(tcp::socket&& socket, WebsocketServer* server) 
@@ -91,6 +100,7 @@ namespace CollabVM {
 
 		void SessionStart();
 
+		// Get the stream this session object is managing
 		WebsocketServer::stream_type& GetStream();
 
 		void OnAccept(beast::error_code& ec);
@@ -104,11 +114,13 @@ namespace CollabVM {
 
 		void OnSend(beast::error_code ec, std::size_t bytes_transferred);
 
+		// Close the session (this handles deleting memory as well)
 		inline void CloseSession() {
 			buf.clear();
 			server->OnSessionClose(this);
 		}
 
+		// Close connection and session
 		inline void Close(ws::close_reason reason = ws::close_reason(ws::close_code::normal)) {
 			stream.async_close(reason, [&](beast::error_code ec) {
 				if (ec)
@@ -118,13 +130,15 @@ namespace CollabVM {
 			});
 		}
 
+		// Get address
 		inline net::ip::address GetAddress() {
 			return stream.next_layer().socket().remote_endpoint().address();
 		}
 
 	private:
-		// pointer to server
-		// used to call server callbacks that are supposed to be
+		// Handle to the WebsocketServer
+		// that created us (by creating the Listener...)
+		// Used to call callbacks.
 		WebsocketServer* server;
 
 		// this session's stream

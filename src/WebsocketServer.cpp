@@ -7,7 +7,7 @@ namespace CollabVM {
 	// .. so there doesn't need to be any other instanation.
 	inline void ConfigureStream(WebsocketServer::stream_type& stream) {
 		// Enable the WebSocket permessage deflate extension.
-	    ws::permessage_deflate pmd;
+		ws::permessage_deflate pmd;
 		pmd.client_enable = true;
 		pmd.server_enable = true;
 		pmd.compLevel = 3;
@@ -19,14 +19,17 @@ namespace CollabVM {
 	// WSSession
 
 	void WSSession::Run() {
+		// Make sure we're on the right strand
 		net::dispatch(stream.get_executor(), beast::bind_front_handler(&WSSession::SessionStart, this));
 	}
 
 	void WSSession::SessionStart() {
 		ConfigureStream(stream);
+
 		stream.set_option(ws::stream_base::timeout::suggested(beast::role_type::server));
 
 		stream.set_option(ws::stream_base::decorator([](ws::response_type& res) {
+			// TODO: Add version information
 			res.set(http::field::server, "collab-vm-server");
 		}));
 
@@ -53,13 +56,14 @@ namespace CollabVM {
 	}
 
 	void WSSession::OnRead(beast::error_code ec, std::size_t bytes_transferred) {
-		if(ec == ws::error::closed) {
+		if(ec == ws::error::closed)
 			CloseSession();
-		}
 
 		if(ec)
 			return;
 
+		// TODO: make this not a temporary? 
+		// (ehhh)
 		WSMessage message{ stream.got_text(), buf };
 
 		server->OnWebsocketMessage(this, message);
@@ -69,7 +73,6 @@ namespace CollabVM {
 		Read();
 	}
 
-	
 	void WSSession::Send(WebsocketServer::message_type& message) {
 		if (message.binary)
 			stream.binary(true);
@@ -80,9 +83,8 @@ namespace CollabVM {
 	}
 
 	void WSSession::OnSend(beast::error_code ec, std::size_t bytes_transferred) {
-		if(ec == ws::error::closed) {
+		if(ec == ws::error::closed)
 			CloseSession();
-		}
 	}
 
 	struct Listener {
@@ -180,7 +182,7 @@ namespace CollabVM {
 		OnWebsocketClose(*it);
 
 		if(it != sessions.end()) {
-			// remove session
+			// remove session and free it
 			delete (*it);
 			sessions.erase(it);
 		}

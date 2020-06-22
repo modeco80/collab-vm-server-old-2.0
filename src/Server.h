@@ -38,7 +38,18 @@ namespace CollabVM {
 			: IWork(WorkType::AddConnection), session(session) {
 		}
 
-	};	
+	};
+
+	struct WSMessageWork : public IWork {
+		WSSession& session;
+		WSMessage message;
+
+		WSMessageWork(WSSession& session, WSMessage message)
+			: IWork(WorkType::Message), session(session), message(message) {
+		
+		}
+	
+	};
 
 	struct Server : public WebsocketServer {
 		typedef WebsocketServer BaseServer;
