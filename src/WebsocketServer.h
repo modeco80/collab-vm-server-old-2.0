@@ -110,11 +110,12 @@ namespace CollabVM {
 		}
 
 		inline void Close(ws::close_reason reason = ws::close_reason(ws::close_code::normal)) {
-			stream.async_close(reason, [](beast::error_code ec) {
+			stream.async_close(reason, [&](beast::error_code ec) {
 				if (ec)
 					return;
+
+				CloseSession();
 			});
-			CloseSession();
 		}
 
 		inline net::ip::address GetAddress() {
