@@ -12,6 +12,7 @@ namespace CollabVM {
 		Message
 	};
 
+	// Generic work 
 	struct IWork {
 		WorkType type;
 
@@ -20,34 +21,24 @@ namespace CollabVM {
 		
 		}
 	};
-
-	struct ConnectionAddWork : public IWork {
-		WebsocketServer::connection_type conPtr;
-
-		ConnectionAddWork(WebsocketServer::connection_type con) 
-			: IWork(WorkType::AddConnection), conPtr(con) {
-		
-		}
-	};	
 	
+	struct ConnectionAddWork : public IWork {
+		WSSession& session;
+
+		ConnectionAddWork(WSSession& session) 
+			: IWork(WorkType::AddConnection), session(session) {
+		}
+
+	};	
+
 	struct ConnectionRemoveWork : public IWork {
-		WebsocketServer::connection_type conPtr;
+		WSSession& session;
 
-		ConnectionRemoveWork(WebsocketServer::connection_type con) 
-			: IWork(WorkType::RemoveConnection), conPtr(con) {
-		
+		ConnectionRemoveWork(WSSession& session) 
+			: IWork(WorkType::AddConnection), session(session) {
 		}
-	};
 
-	struct WebsocketMessageWork : public IWork {
-		WebsocketServer::stream_type s;
-		WebsocketServer::message_type message;
-
-		WebsocketMessageWork(WebsocketServer::connection_type con, WebsocketServer::message_type msg)
-			: IWork(WorkType::Message), conPtr(con), message(msg) {
-		
-		}
-	};
+	};	
 
 	struct Server : public WebsocketServer {
 		typedef WebsocketServer BaseServer;
@@ -64,11 +55,25 @@ namespace CollabVM {
 
 		void Stop();
 
-		void OnWebsocketOpen(BaseServer::handle_type userHdl);
+		//bool OnWebsocketValidate(BaseServer::handle_type handle);
 
-		void OnWebsocketMessage(BaseServer::handle_type userHdl, BaseServer::message_type message);
+		void OnWebsocketOpen(BaseServer::handle_type handle);
 
-		void OnWebsocketClose(BaseServer::handle_type userHdl);
+		void OnWebsocketMessage(BaseServer::handle_type handle, BaseServer::message_type message);
+
+		void OnWebsocketClose(BaseServer::handle_type handle);
+
+		// Shorthand to add work to the work queue
+		inline void AddWork(IWork* newWork) {
+			// Only add action to the work queue if
+			// the work to add isn't nullptr
+			if(newWork) {
+				std::lock_guard<std::mutex> lock(WorkLock);
+
+				work.push_back((IWork*)newWork);
+				WorkReady.notify_one();
+			}
+		}
 
 	private:
 		void ProcessActions();
@@ -78,17 +83,6 @@ namespace CollabVM {
 		void CreateIPData(net::ip::address& address);
 
 		void CleanupIPData();
-
-		// Shorthand to add work to the processing queue
-		inline void AddWork(IWork* newWork) {
-			// Only add action to the work queue
-			if(newWork) {
-				std::lock_guard<std::mutex> lock(WorkLock);
-
-				work.push_back((IWork*)newWork);
-				WorkReady.notify_one();
-			}
-		}
 
 		inline void StartIPDataTimer() {
 			IPDataCleanupTimer.expires_after(net::steady_timer::duration(IPDataTimeout));
@@ -137,6 +131,7 @@ namespace CollabVM {
 		// maps handles of streams to users
 		std::map<WebsocketServer::handle_type, User*> users;
 
+		// logger
 		Logger logger = Logger::GetLogger("CollabVMServer");
 	};
 

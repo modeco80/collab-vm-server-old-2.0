@@ -9,9 +9,10 @@ using namespace CollabVM;
 
 namespace po = boost::program_options;
 
-std::string listen = "0.0.0.0";
+std::string laddr = "0.0.0.0";
 uint16 port = 6004;
 
+net::ip::address address;
 
 net::io_service ioc;
 net::io_service::work* work;
@@ -65,8 +66,15 @@ int main(int argc, char** argv) {
 	}
 
 	if(vm.count("listen")) {
-		
+		try {
+			laddr = vm["listen"].as<std::string>();
+		} catch(...) {
+			std::cout << "Error: invalid listen address\n";
+			return 1;
+		}
 	}
+
+	address = net::ip::make_address(laddr);
 
 	if(vm.count("port")) {
 		try {
@@ -92,7 +100,7 @@ int main(int argc, char** argv) {
 	});
 
 	Worker([]() {
-		server->Start(port);
+		server->Start(tcp::endpoint{address, port});
 	});
 
 	thread.join();

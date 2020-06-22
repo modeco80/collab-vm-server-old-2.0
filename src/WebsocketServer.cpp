@@ -16,31 +16,173 @@ namespace CollabVM {
 		stream.auto_fragment(false);
 	}
 
-	struct WSSession {
+	// WSSession
+
+	void WSSession::Run() {
+		net::dispatch(stream.get_executor(), beast::bind_front_handler(&WSSession::SessionStart, this));
+	}
+
+	void WSSession::SessionStart() {
+		ConfigureStream(stream);
+		stream.set_option(ws::stream_base::timeout::suggested(beast::role_type::server));
+
+		stream.set_option(ws::stream_base::decorator([](ws::response_type& res) {
+			res.set(http::field::server, "collab-vm-server");
+		}));
+
+		stream.async_accept(beast::bind_front_handler(&WSSession::OnAccept, this));
+	}
+
+	inline WebsocketServer::stream_type& WSSession::GetStream() {
+		return stream;
+	}
+
+	void WSSession::OnAccept(beast::error_code& ec) {
+		if(ec)
+			return;
+
+		logger.verbose("Accepted session for ", GetAddress().to_string());
+
+		server->OnWebsocketOpen(this);
+
+		Read();
+	}
+
+	void WSSession::Read() {
+		stream.async_read(buf, beast::bind_front_handler(&WSSession::OnRead, this));
+	}
+
+	void WSSession::OnRead(beast::error_code ec, std::size_t bytes_transferred) {
+		if(ec == ws::error::closed) {
+			CloseSession();
+		}
+
+		if(ec)
+			return;
+
+		WSMessage message{ stream.got_text(), buf };
+
+		server->OnWebsocketMessage(this, message);
+
+		buf.consume(buf.size());
+
+		Read();
+	}
+
 	
-	private:
-		// pointer to server
-		// used for callbacks
-		WebsocketServer* server;
-	};
+	void WSSession::Send(WebsocketServer::message_type& message) {
+		if (message.binary)
+			stream.binary(true);
+		else
+			stream.text(true);
+
+		stream.async_write(message.message.data(), beast::bind_front_handler(&WSSession::OnSend, this));
+	}
+
+	void WSSession::OnSend(beast::error_code ec, std::size_t bytes_transferred) {
+		if(ec == ws::error::closed) {
+			CloseSession();
+		}
+	}
 
 	struct Listener {
 
+		Listener(net::io_service& ioc, tcp::endpoint& ep, WebsocketServer* srv)
+			: ioc(ioc),
+			acceptor(ioc), server(srv) {
+			beast::error_code ec;
+
+			acceptor.open(ep.protocol(), ec);
+			
+			acceptor.set_option(net::socket_base::reuse_address(true), ec);
+
+			acceptor.bind(ep, ec);
+
+			acceptor.listen(net::socket_base::max_listen_connections, ec);
+		}
+
+		void Run() {
+			DoAccept();
+		}
+
 	private:
+
+		void DoAccept() {
+			acceptor.async_accept(net::make_strand(ioc), beast::bind_front_handler(&Listener::OnAccept, this));
+		}
+
+		void OnAccept(beast::error_code ec, tcp::socket socket) {
+			if(ec)
+				return;
+
+
+			// TODO: figure out how to do subprotocols
+
+			std::lock_guard<std::mutex> lock(server->SessionsLock);
+			server->sessions.push_back(new WSSession(std::move(socket), server));
+			server->sessions.back()->Run();
+
+
+			// accept another connection after we start the WS session
+			DoAccept();
+		}
+
 		// pointer to server
 		WebsocketServer* server;
+
+		tcp::acceptor acceptor;
+		net::io_service& ioc;
 	};
+
+	// WebsocketServer
 
 	void WebsocketServer::Start(tcp::endpoint& ep) {
 		using namespace std::placeholders;
 
 		wsLogger.info("Starting server on ", ep.address().to_string() ,":", ep.port());
 
-
+		listener = new Listener(*io_service, ep, this);
+		listener->Run();
+		io_service->run();
 	}
 
 
 	void WebsocketServer::Stop() {
+		if (listener)
+			delete listener;
 	}
 
+	void WebsocketServer::Broadcast(message_type& message) {
+		std::lock_guard<std::mutex> lock(SessionsLock);
+
+		for(auto session : sessions)
+			session->Send(message);
+	}
+
+	void WebsocketServer::OnSessionClose(WSSession* session) {
+		if(!session)
+			return;
+
+		std::lock_guard<std::mutex> lock(SessionsLock);
+
+		// find session in list
+		auto FindSession = [&]() {
+			for (auto it = sessions.begin(); it != sessions.end(); ++it)
+				if (*it == session)
+					return it;
+
+			return sessions.end();
+		};
+
+		auto it = FindSession();
+
+		// call close handler before removing session
+		OnWebsocketClose(*it);
+
+		if(it != sessions.end()) {
+			// remove session
+			delete (*it);
+			sessions.erase(it);
+		}
+	}
 }

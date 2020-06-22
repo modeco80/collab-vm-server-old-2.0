@@ -40,59 +40,28 @@ namespace CollabVM {
 				delete user.second;
 	}
 
-	// beast rewrite won't have validate callback
-	// move everything in here to onopen
 #if 0
 	bool Server::OnWebsocketValidate(BaseServer::handle_type userHdl) {
-		// TODO: Implement connection limit & soft-bans
-		// (shouldn't be hard)
-
-		std::error_code ec;
-		auto conPtr = ws_server->get_con_from_hdl(userHdl, ec);
-
-		if(ec)
-			return false;
-
-		auto protocols = conPtr->get_requested_subprotocols();
-
-		for(auto& protocol : protocols) {
-			if (protocol == "cvm2") {
-				conPtr->select_subprotocol(protocol);
-
-				auto endpoint = conPtr->get_raw_socket().remote_endpoint();
-				auto addr = endpoint.address();
-
-
-				if(FindIPData(addr) == nullptr) {
-					CreateIPData(addr);
-				}
-				auto data = FindIPData(addr);
-
-				data->connection_count++;
-				return true;
-			}
-		}
-
-		return false;
-
+		// TODO
 	}
 #endif
 
-	void Server::OnWebsocketOpen(BaseServer::handle_type userHdl) {
+	void Server::OnWebsocketOpen(BaseServer::handle_type handle) {
+		auto& session = GetSessionFromHandle(handle);
 
-
-		AddWork(new ConnectionAddWork());
+		logger.info("OnWebsocketOpen()");
 	}
 
-	void Server::OnWebsocketMessage(BaseServer::handle_type userHdl, BaseServer::message_type message) {
-		// exclude text messages from work,
-		// we don't use those 
-		//if(message->get_opcode() == websocketpp::frame::opcode::binary)
-		//	AddWork(new WebsocketMessageWork(conPtr, message));
+	void Server::OnWebsocketMessage(BaseServer::handle_type handle, BaseServer::message_type message) {
+		auto& session = GetSessionFromHandle(handle);
+
+		logger.info("message: ", beast::buffers_to_string(message.message.data()));
 	}
 
-	void Server::OnWebsocketClose(BaseServer::handle_type userHdl) {
-		//AddWork(new ConnectionRemoveWork(conPtr));
+	void Server::OnWebsocketClose(BaseServer::handle_type handle) {
+		auto& session = GetSessionFromHandle(handle);
+
+		logger.info("OnWebsocketClose()");
 	}
 
 	IPData* Server::FindIPData(net::ip::address& address) {
@@ -186,7 +155,7 @@ namespace CollabVM {
 	}
 
 	void Server::ProcessActions() {
-		logger.verbose("Processing thread started");
+		logger.verbose("Work thread started");
 
 		while(!StopWorking) {
 			std::unique_lock<std::mutex> lock(WorkLock);
@@ -214,12 +183,13 @@ namespace CollabVM {
 					//users[add->conPtr] = new User(add->conPtr, data);
 					//logger.info("User Connected (IP: ", data->str(), ")");
 				} break;
-
+					
 				case WorkType::RemoveConnection: {
+#if 0 
 					std::lock_guard<std::mutex> lock(UsersLock);
 					ConnectionRemoveWork* add = (ConnectionRemoveWork*)action;
 
-					auto it = users.find(add->conPtr);
+					auto it = users.find(&add->stream);
 					
 					IPData* data = FindIPData(it->second->ipData->address);
 
@@ -232,6 +202,7 @@ namespace CollabVM {
 						delete it->second;
 
 					users.erase(it);
+#endif
 				} break;
 
 				case WorkType::Message: {
@@ -239,7 +210,7 @@ namespace CollabVM {
 				} break;
 
 				default:
-					logger.verbose("Action type ", (int)action->type, " not implemented");
+					logger.verbose("Work type ", (int)action->type, " not implemented");
 					break;
 			}
 
