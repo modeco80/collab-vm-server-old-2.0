@@ -53,3 +53,13 @@ namespace http = beast::http;
 namespace ws = beast::websocket;
 
 using tcp = net::ip::tcp;
+
+
+namespace CollabVM {
+	// So we don't have to include the filesystem library just to get this constant.
+#ifdef _WIN32
+	constexpr char PlatformDirSeperator = '\\';
+#else
+	constexpr char PlatformDirSeperator = '/';
+#endif
+}

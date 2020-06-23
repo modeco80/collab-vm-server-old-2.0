@@ -18,22 +18,26 @@ namespace CollabVM {
 
 	// WSSession
 
-	void WSSession::Run() {
-		// Make sure we're on the right strand
-		net::dispatch(stream.get_executor(), beast::bind_front_handler(&WSSession::SessionStart, this));
+	void WSSession::Run(http::request<http::string_body> req) {
+		SessionStart(req);
 	}
 
-	void WSSession::SessionStart() {
+	void WSSession::SessionStart(http::request<http::string_body> req) {
 		ConfigureStream(stream);
 
 		stream.set_option(ws::stream_base::timeout::suggested(beast::role_type::server));
 
-		stream.set_option(ws::stream_base::decorator([](ws::response_type& res) {
-			// TODO: Add version information
-			res.set(http::field::server, "collab-vm-server");
+		stream.set_option(ws::stream_base::decorator([&](ws::response_type& res) {
+			// Set the subprotocol if we need to
+			if(!subprotocol.empty())
+				res.set(http::field::sec_websocket_protocol, subprotocol);
+
+			
+			// TODO(maybe): Add version information
+			res.set(http::field::server, "collab-vm-server/2.0");
 		}));
 
-		stream.async_accept(beast::bind_front_handler(&WSSession::OnAccept, this));
+		stream.async_accept(req, beast::bind_front_handler(&WSSession::OnAccept, this));
 	}
 
 	inline WebsocketServer::stream_type& WSSession::GetStream() {
@@ -46,7 +50,7 @@ namespace CollabVM {
 
 		logger.verbose("Accepted session for ", GetAddress().to_string());
 
-		server->OnWebsocketOpen(this);
+		server->OnOpen(this);
 
 		Read();
 	}
@@ -56,17 +60,18 @@ namespace CollabVM {
 	}
 
 	void WSSession::OnRead(beast::error_code ec, std::size_t bytes_transferred) {
-		if(ec == ws::error::closed)
+		if(ec == ws::error::closed) {
 			CloseSession();
+			return;
+		}
 
 		if(ec)
 			return;
 
-		// TODO: make this not a temporary? 
-		// (ehhh)
-		WSMessage message{ stream.got_text(), buf };
+		// make message
+		message = WSMessage { stream.got_text(), buf };
 
-		server->OnWebsocketMessage(this, message);
+		server->OnMessage(this, message);
 
 		buf.consume(buf.size());
 
@@ -87,6 +92,95 @@ namespace CollabVM {
 			CloseSession();
 	}
 
+	struct HTTPSession {
+		
+		explicit HTTPSession(WebsocketServer* server, tcp::socket&& socket)
+			: server(server), stream(std::move(socket)) {
+		
+		}
+	
+		void Run() {
+			// Ensure we're on the right strand
+			net::dispatch(stream.get_executor(), beast::bind_front_handler(&HTTPSession::Read, this));
+		}
+
+		void Close() {
+			beast::error_code ec;
+			stream.socket().shutdown(tcp::socket::shutdown_send, ec);
+
+			server->OnHttpClose(this);
+		}
+
+	private:
+
+		void Read() {
+			req = {};
+
+			http::async_read(stream, request_buffer, req, beast::bind_front_handler(&HTTPSession::OnRead, this));
+		}
+
+		void OnRead(beast::error_code ec, size_t bytes_written) {
+			if (ec == http::error::end_of_stream)
+				Close();
+
+			if (ec)
+				return;
+
+			if (ws::is_upgrade(req)) {
+
+				auto subprotocols = http::token_list(req[http::field::sec_websocket_protocol]);
+
+				server->sessions.push_back(new WSSession(std::move(stream.socket()), server, subprotocols));
+
+				// Hold pointer to session
+				auto session = server->sessions.back();
+
+				// At this point, there is no actual Websocket connection ready quite yet,
+				// but we can verify if the user has the right subprotocol and/or any limits.
+				//
+				// If the verify callback returns false, then we should close the session
+				// and wait for another accept.
+				if (!server->OnVerify(session)) {
+					session->CloseSession();
+					return;
+				}
+
+				session->Run(req);
+			} else {
+				// TODO: implement a basic static file host. (NOTE: make sure to allow chunk/resume stuff?
+
+				logger.info(stream.socket().remote_endpoint().address().to_string(), " Requested ", req.target());
+				http::response<http::string_body> res;
+
+				res.result(http::status::ok);
+				res.body() = "CollabVM 2.0";
+
+				http::async_write(stream.socket(), res, [&](beast::error_code ec, std::size_t) {
+					if (ec)
+						return;
+
+					// Close regardless of the header. We don't care (yet)
+					Close();
+				});
+			}
+
+			//Read();
+		}
+		
+		// Handle to the WebsocketServer
+		// that created us.
+		WebsocketServer* server;
+		
+		beast::tcp_stream stream;
+
+		// HTTP request buffer
+		beast::flat_buffer request_buffer;
+
+		http::request<http::string_body> req;
+
+		Logger logger = Logger::GetLogger("HTTP");
+	};
+
 	struct Listener {
 
 		Listener(net::io_service& ioc, tcp::endpoint& ep, WebsocketServer* srv)
@@ -95,11 +189,8 @@ namespace CollabVM {
 			beast::error_code ec;
 
 			acceptor.open(ep.protocol(), ec);
-			
 			acceptor.set_option(net::socket_base::reuse_address(true), ec);
-
 			acceptor.bind(ep, ec);
-
 			acceptor.listen(net::socket_base::max_listen_connections, ec);
 		}
 
@@ -113,20 +204,21 @@ namespace CollabVM {
 			acceptor.async_accept(net::make_strand(ioc), beast::bind_front_handler(&Listener::OnAccept, this));
 		}
 
-		void OnAccept(beast::error_code ec, tcp::socket socket) {
+
+		void OnAccept(beast::error_code ec, tcp::socket socket_) {
 			if(ec)
 				return;
-
-
-			// TODO: figure out how to do subprotocols
-
+			
 			std::lock_guard<std::mutex> lock(server->SessionsLock);
-			server->sessions.push_back(new WSSession(std::move(socket), server));
-			server->sessions.back()->Run();
+			
+			server->http_sessions.push_back(new HTTPSession(server, std::move(socket_)));
+			auto session = server->http_sessions.back();
 
+			session->Run();
 
-			// accept another connection after we start the WS session
+			// accept another connection after we start the HTTP session
 			DoAccept();
+
 		}
 
 		// pointer to server
@@ -179,12 +271,37 @@ namespace CollabVM {
 		auto it = FindSession();
 
 		// call close handler before removing session
-		OnWebsocketClose(*it);
+		OnClose(*it);
 
 		if(it != sessions.end()) {
 			// remove session and free it
 			delete (*it);
 			sessions.erase(it);
+		}
+	}	
+	
+	void WebsocketServer::OnHttpClose(HTTPSession* session) {
+		if(!session)
+			return;
+
+		std::lock_guard<std::mutex> lock(SessionsLock);
+
+		// find session in list
+		auto FindSession = [&]() {
+			for (auto it = http_sessions.begin(); it != http_sessions.end(); ++it)
+				if (*it == session)
+					return it;
+
+			return http_sessions.end();
+		};
+
+		auto it = FindSession();
+
+
+		if(it != http_sessions.end()) {
+			// remove session and free it
+			delete (*it);
+			http_sessions.erase(it);
 		}
 	}
 }

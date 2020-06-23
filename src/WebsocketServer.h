@@ -5,6 +5,7 @@
 namespace CollabVM {
 
 	struct WSSession;
+	struct HTTPSession;
 	struct Listener;
 
 	// wrapper over flat_buffer that stores a bit more info about the message
@@ -21,6 +22,7 @@ namespace CollabVM {
 
 	struct WebsocketServer {
 		friend struct WSSession;
+		friend struct HTTPSession;
 		friend struct Listener;
 
 		typedef ws::stream<beast::tcp_stream> stream_type;
@@ -31,6 +33,7 @@ namespace CollabVM {
 		// handle type
 		// The handle type is a handle to the session.
 		typedef WSSession* handle_type;
+		typedef HTTPSession* http_handle_type;
 
 		inline WebsocketServer(net::io_service& ioc)
 			: io_service(&ioc) {
@@ -43,13 +46,15 @@ namespace CollabVM {
 
 		// Callbacks run where the io service runs
 		
-		//virtual bool OnWebsocketVerify(handle_type handle) = 0;
+		virtual bool OnVerify(handle_type handle) = 0;
 
-		virtual void OnWebsocketOpen(handle_type handle) = 0;
+		// TODO: OnHttp?
 
-		virtual void OnWebsocketMessage(handle_type handle, message_type message) = 0;
+		virtual void OnOpen(handle_type handle) = 0;
 
-		virtual void OnWebsocketClose(handle_type handle) = 0;	
+		virtual void OnMessage(handle_type handle, message_type& message) = 0;
+
+		virtual void OnClose(handle_type handle) = 0;	
 		
 		// get session from a handle (with sanity checking)
 		inline static WSSession& GetSessionFromHandle(handle_type handle) {
@@ -73,16 +78,24 @@ namespace CollabVM {
 		// lock on sessions
 		std::mutex SessionsLock;
 
-		// all running sessions
+		// all running WSsessions
 		std::vector<WSSession*> sessions;
+
+		// All running HTTP sessions (type erased)
+		std::vector<HTTPSession*> http_sessions;
 
 		// listener
 		Listener* listener;
-
+		
 		// internal callback, 
 		// called when a session requests close
 		// frees said session
 		void OnSessionClose(WSSession* session);
+
+		// internal callback, 
+		// called when a session requests close
+		// frees said session
+		void OnHttpClose(HTTPSession* session);
 
 	private:
 		Logger wsLogger = Logger::GetLogger("WebSocketServer");
@@ -91,14 +104,14 @@ namespace CollabVM {
 	// WebSocket session
 	struct WSSession {
 	
-		explicit WSSession(tcp::socket&& socket, WebsocketServer* server) 
-		 : stream(std::move(socket)), server(server) {
+		explicit WSSession(tcp::socket&& socket, WebsocketServer* server, http::token_list& subprotocols) 
+		 : stream(std::move(socket)), server(server), subprotocols(subprotocols) {
 		
 		}
 
-		void Run();
+		void Run(http::request<http::string_body> req);
 
-		void SessionStart();
+		void SessionStart(http::request<http::string_body> req);
 
 		// Get the stream this session object is managing
 		WebsocketServer::stream_type& GetStream();
@@ -135,6 +148,20 @@ namespace CollabVM {
 			return stream.next_layer().socket().remote_endpoint().address();
 		}
 
+		inline http::token_list GetSubprotocols() {
+			return subprotocols;
+		}
+
+		inline void SetSubprotocol(std::string protocol) {
+			subprotocol = protocol;
+		}
+
+		// All subprotocols
+		http::token_list& subprotocols;
+
+		// subprotocol in use
+		std::string subprotocol;
+
 	private:
 		// Handle to the WebsocketServer
 		// that created us (by creating the Listener...)
@@ -143,6 +170,9 @@ namespace CollabVM {
 
 		// this session's stream
 		WebsocketServer::stream_type stream;
+
+		// message. A reference to this is given out
+		WSMessage message;
 
 		// buffer for this session
 		beast::flat_buffer buf;

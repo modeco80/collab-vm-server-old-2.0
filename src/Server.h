@@ -12,8 +12,10 @@ namespace CollabVM {
 		Message
 	};
 
-	// Generic work 
+	// Interface that work follows.
 	struct IWork {
+		// Which work type.
+		// If you're adding work, make sure to add a value to the above WorkType enum
 		WorkType type;
 
 		IWork(WorkType t)
@@ -35,7 +37,7 @@ namespace CollabVM {
 		WSSession& session;
 
 		ConnectionRemoveWork(WSSession& session) 
-			: IWork(WorkType::AddConnection), session(session) {
+			: IWork(WorkType::RemoveConnection), session(session) {
 		}
 
 	};
@@ -44,7 +46,7 @@ namespace CollabVM {
 		WSSession& session;
 		WSMessage message;
 
-		WSMessageWork(WSSession& session, WSMessage message)
+		WSMessageWork(WSSession& session, WSMessage& message)
 			: IWork(WorkType::Message), session(session), message(message) {
 		
 		}
@@ -66,13 +68,13 @@ namespace CollabVM {
 
 		void Stop();
 
-		//bool OnWebsocketValidate(BaseServer::handle_type handle);
+		bool OnVerify(BaseServer::handle_type handle);
 
-		void OnWebsocketOpen(BaseServer::handle_type handle);
+		void OnOpen(BaseServer::handle_type handle);
 
-		void OnWebsocketMessage(BaseServer::handle_type handle, BaseServer::message_type message);
+		void OnMessage(BaseServer::handle_type handle, BaseServer::message_type& message);
 
-		void OnWebsocketClose(BaseServer::handle_type handle);
+		void OnClose(BaseServer::handle_type handle);
 
 		// Shorthand to add work to the work queue
 		inline void AddWork(IWork* newWork) {
