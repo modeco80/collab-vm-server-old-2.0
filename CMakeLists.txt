@@ -44,4 +44,3 @@ set_property(TARGET collab-vm-server PROPERTY CXX_STANDARD_REQUIRED ON)
 
 target_link_libraries(collab-vm-server ${CMAKE_THREAD_LIBS_INIT} flatbuffers Boost::system Boost::program_options)
 target_include_directories(collab-vm-server PUBLIC ${PROJECT_SOURCE_DIR}/src)
-target_include_directories(collab-vm-server PUBLIC ${PROJECT_SOURCE_DIR}/vendor/websocketpp/)

@@ -3,6 +3,8 @@
 #include <ctime>
 #include <iostream>
 #include <cstdint>
+#include <map>
+#include <deque>
 #include <vector>
 #include <mutex>
 #include <thread>
@@ -35,12 +37,29 @@ namespace CollabVM {
 // to make Boost.Asio not spew warnings about it
 // every single time it's referenced
 #ifdef _WIN32
-#ifdef _MSC_VER
+#if __has_include(<sdkddkver.h>)
 	#include <sdkddkver.h>
 #endif
 #endif
 
+// Boost
 #include <boost/asio.hpp>
+#include <boost/beast.hpp>
 
 namespace net = boost::asio;
+namespace beast = boost::beast;
+
+namespace http = beast::http;
+namespace ws = beast::websocket;
+
 using tcp = net::ip::tcp;
+
+
+namespace CollabVM {
+	// So we don't have to include the filesystem library just to get this constant.
+#ifdef _WIN32
+	constexpr char PlatformDirSeperator = '\\';
+#else
+	constexpr char PlatformDirSeperator = '/';
+#endif
+}

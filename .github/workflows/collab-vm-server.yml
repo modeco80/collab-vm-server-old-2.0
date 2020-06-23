@@ -1,0 +1,40 @@
+name: collab-vm-server CI 
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Cache Boost
+      uses: actions/cache@v1.0.3
+      id: cache-boost
+      with:
+        path: "~/boost"
+        key: libboost1.71-dev
+    - name: Install boost
+      env:
+        CACHE_HIT: ${{steps.cache-boost.outputs.cache-hit}}
+      run: |
+        if [[ "$CACHE_HIT" == 'true' ]]; then
+          sudo cp --force --recursive ~/boost/* /
+        else
+          sudo apt-get update && sudo apt-get install -yq libboost1.71-dev
+          mkdir -p ~/boost
+          for dep in libboost1.71-dev; do
+              dpkg -L $dep | while IFS= read -r f; do if test -f $f; then echo $f; fi; done | xargs cp --parents --target-directory ~/boost/
+          done
+        fi
+    - name: Generate CMake build files
+      run: mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release
+    - name: Build collab-vm-server
+      run: cd build && make -j3
+    - name: Upload collab-vm-server
+      uses: actions/upload-artifact@v1
+      with:
+        path: build/collab-vm-server

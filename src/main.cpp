@@ -9,10 +9,16 @@ using namespace CollabVM;
 
 namespace po = boost::program_options;
 
+std::string laddr = "0.0.0.0";
 uint16 port = 6004;
+
+net::ip::address address;
+
 net::io_service ioc;
 net::io_service::work* work;
 Server* server;
+
+Logger mainlogger = Logger::GetLogger("Main");
 
 void StopServer() {
 	delete work;
@@ -22,7 +28,11 @@ void StopServer() {
 
 template<typename F>
 inline void Worker(F function) {
-	function();
+	try {
+		function();
+	} catch(std::exception& ex) {
+		mainlogger.error("Got exception: ", ex.what());
+	}
 }
 
 int main(int argc, char** argv) {
@@ -33,6 +43,7 @@ int main(int argc, char** argv) {
 		("help", "Print this help message")
 		("verbose", "Enable verbose debug logging")
 		("version", "Output version of CollabVM Server")
+		("listen", po::value<std::string>(),  "Listen address (default 0.0.0.0)")
 		("port", po::value<decltype(port)>(), "Server port (default 6004)");
 
 	po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -53,6 +64,17 @@ int main(int argc, char** argv) {
 		std::cout << builder.str();
 		return 0;
 	}
+
+	if(vm.count("listen")) {
+		try {
+			laddr = vm["listen"].as<std::string>();
+		} catch(...) {
+			std::cout << "Error: invalid listen address\n";
+			return 1;
+		}
+	}
+
+	address = net::ip::make_address(laddr);
 
 	if(vm.count("port")) {
 		try {
@@ -78,7 +100,7 @@ int main(int argc, char** argv) {
 	});
 
 	Worker([]() {
-		server->Start(port);
+		server->Start(tcp::endpoint{address, port});
 	});
 
 	thread.join();
