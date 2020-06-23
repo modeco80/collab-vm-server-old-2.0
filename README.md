@@ -13,14 +13,14 @@ First, clone this repository with `--recursive`.
 ## Linux
 
 #### Debian/Ubuntu
-`sudo apt install libboost-all-dev`
+`sudo apt install libboost-all-dev` (You may need to use vcpkg if your boost is too old to have Beast.)
 
 #### Arch
 `sudo pacman -S boost boost-libs`
 
 #### Windows
 
-Install vcpkg and do `vcpkg install -t x64-windows boost` (example) or compile boost by hand.
+Install vcpkg and run `vcpkg install boost:x64-windows` (example) or compile boost by hand.
 
 You can either use the below instructions (for basically all platforms) or on Windows,
 you can use the CMake tools Visual Studio provides with vcpkg integrations installed.
@@ -28,6 +28,6 @@ you can use the CMake tools Visual Studio provides with vcpkg integrations insta
 ```
 mkdir build
 cd build
-cmake .. -DCMAKE_BUILD_TYPE=(Release|Debug) (On windows if you use vcpkg add -DCMAKE_TOOLCHAIN=%VCPKG_ROOT%\scripts\buildsystems\cmake)
+cmake .. -DCMAKE_BUILD_TYPE=(Release|Debug) (On windows if you use vcpkg add -DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake)
 cmake --build .
 ```

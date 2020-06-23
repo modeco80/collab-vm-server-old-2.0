@@ -39,7 +39,9 @@ jobs:
         cd build
         cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake
     - name: Build collab-vm-server
-      run: make -j3
+      run: |
+        cd build
+        make -j3
     - name: Upload collab-vm-server
       uses: actions/upload-artifact@v1
       with:
