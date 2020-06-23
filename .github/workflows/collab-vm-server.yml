@@ -32,6 +32,8 @@ jobs:
             ./vcpkg install boost:x64-linux
             cd ..
         fi
+    - name: Install vcpkg and boost if needed
+      run: sudo apt install make -y
     - name: Generate CMake build files
       run: mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake
     - name: Build collab-vm-server
