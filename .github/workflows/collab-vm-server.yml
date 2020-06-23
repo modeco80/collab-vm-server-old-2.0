@@ -10,28 +10,30 @@ jobs:
   build-ubuntu:
     runs-on: ubuntu-20.04
     steps:
-    - uses: actions/checkout@v2
-    - name: Cache Boost
-      uses: actions/cache@v1.0.3
-      id: cache-boost
+    - name: Checkout
+      uses: actions/checkout@v2
       with:
-        path: "~/boost"
-        key: boost
-    - name: Install boost
+      # recursively checkout, we need to do this in order to properly compile
+          submodules: 'recursive'
+    - name: Cache vcpkg tree
+      uses: actions/cache@v1.0.3
+      id: cache-vcpkg
+      with:
+        path: "~/vcpkg"
+        key: vcpkg
+    - name: Install vcpkg and boost if needed
       env:
-        CACHE_HIT: ${{steps.cache-boost.outputs.cache-hit}}
+        CACHE_HIT: ${{steps.cache-vcpkg.outputs.cache-hit}}
       run: |
-        if [[ "$CACHE_HIT" == 'true' ]]; then
-          sudo cp --force --recursive ~/boost/* /
-        else
-          sudo apt-get update && sudo apt-get install -yq libboost1.67-dev
-          mkdir -p ~/boost
-          for dep in libboost1.67-dev; do
-              dpkg -L $dep | while IFS= read -r f; do if test -f $f; then echo $f; fi; done | xargs cp --parents --target-directory ~/boost/
-          done
+        if [[ "$CACHE_HIT" == 'false' ]]; then
+            git clone https://github.com/Microsoft/vcpkg
+            cd vcpkg
+            ./bootstrap_vcpkg.sh -disableMetrics
+            ./vcpkg install boost:x64-linux
+            cd ..
         fi
     - name: Generate CMake build files
-      run: mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release
+      run: mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake
     - name: Build collab-vm-server
       run: cd build && make -j3
     - name: Upload collab-vm-server
