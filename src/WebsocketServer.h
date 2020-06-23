@@ -116,7 +116,7 @@ namespace CollabVM {
 		// Get the stream this session object is managing
 		WebsocketServer::stream_type& GetStream();
 
-		void OnAccept(beast::error_code& ec);
+		void OnAccept(beast::error_code ec);
 
 		void Read();
 

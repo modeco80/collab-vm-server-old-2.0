@@ -1,5 +1,7 @@
 #include "WebsocketServer.h"
 
+using namespace std::placeholders;
+
 namespace CollabVM {
 
 	// NOTE: This function isn't templated like ws_server_fast
@@ -44,7 +46,7 @@ namespace CollabVM {
 		return stream;
 	}
 
-	void WSSession::OnAccept(beast::error_code& ec) {
+	void WSSession::OnAccept(beast::error_code ec) {
 		if(ec)
 			return;
 
