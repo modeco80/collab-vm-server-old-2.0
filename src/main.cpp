@@ -100,7 +100,8 @@ int main(int argc, char** argv) {
 	});
 
 	Worker([]() {
-		server->Start(tcp::endpoint{address, port});
+		tcp::endpoint ep{address, port};
+		server->Start(ep);
 	});
 
 	thread.join();

@@ -40,7 +40,7 @@ namespace CollabVM {
 		stream.async_accept(req, beast::bind_front_handler(&WSSession::OnAccept, this));
 	}
 
-	inline WebsocketServer::stream_type& WSSession::GetStream() {
+	WebsocketServer::stream_type& WSSession::GetStream() {
 		return stream;
 	}
 

@@ -48,10 +48,12 @@ namespace CollabVM {
 
 		for(auto subprotocol : subprotocols) {
 			if(subprotocol == "cvm2") {
-				if (FindIPData(session.GetAddress()) == nullptr)
-					CreateIPData(session.GetAddress());
+				auto addr = session.GetAddress();
 
-				IPData* data = FindIPData(session.GetAddress());
+				if (FindIPData(addr) == nullptr)
+					CreateIPData(addr);
+
+				IPData* data = FindIPData(addr);
 				data->connection_count++;
 
 				return true;
