@@ -26,18 +26,20 @@ jobs:
         CACHE_HIT: ${{steps.cache-vcpkg.outputs.cache-hit}}
       run: |
         if [[ "$CACHE_HIT" == '' ]]; then
+            cd
             git clone https://github.com/Microsoft/vcpkg
             cd vcpkg
             ./bootstrap-vcpkg.sh -disableMetrics
             ./vcpkg install boost:x64-linux
-            cd ..
+            cd ~/work/collab-vm-server
         fi
-    - name: Install vcpkg and boost if needed
-      run: sudo apt install make -y
     - name: Generate CMake build files
-      run: mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake
+      run: |
+        mkdir build 
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake
     - name: Build collab-vm-server
-      run: cd build && make -j3
+      run: make -j3
     - name: Upload collab-vm-server
       uses: actions/upload-artifact@v1
       with:
