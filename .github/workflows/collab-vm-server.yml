@@ -25,7 +25,7 @@ jobs:
       env:
         CACHE_HIT: ${{steps.cache-vcpkg.outputs.cache-hit}}
       run: |
-        if [[ "$CACHE_HIT" == 'false' ]]; then
+        if [[ "$CACHE_HIT" == '' ]]; then
             git clone https://github.com/Microsoft/vcpkg
             cd vcpkg
             ./bootstrap_vcpkg.sh -disableMetrics
