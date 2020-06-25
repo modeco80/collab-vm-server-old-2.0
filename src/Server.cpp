@@ -35,20 +35,19 @@ namespace CollabVM {
 			if(ip.second)
 				delete ip.second;
 
-		for(auto& user : users)
-			if(user.second)
-				delete user.second;
+		for (auto& user : users)
+			if (user.second)
+				user.second.reset();
 	}
 
 
 	bool Server::OnVerify(BaseServer::handle_type handle) {
-		auto& session = WebsocketServer::GetSessionFromHandle(handle);
 
-		auto subprotocols = session.GetSubprotocols();
+		auto subprotocols = handle->GetSubprotocols();
 
 		for(auto subprotocol : subprotocols) {
 			if(subprotocol == "cvm2") {
-				auto addr = session.GetAddress();
+				auto addr = handle->GetAddress();
 
 				if (FindIPData(addr) == nullptr)
 					CreateIPData(addr);
@@ -64,22 +63,15 @@ namespace CollabVM {
 	}
 
 	void Server::OnOpen(BaseServer::handle_type handle) {
-		auto& session = WebsocketServer::GetSessionFromHandle(handle);
-
-		AddWork(new ConnectionAddWork(session));
+		AddWork(std::make_shared<ConnectionAddWork>(handle));
 	}
 
-	void Server::OnMessage(BaseServer::handle_type handle, BaseServer::message_type& message) {
-		auto& session = WebsocketServer::GetSessionFromHandle(handle);
-		logger.info("message: ", beast::buffers_to_string(message.message.data()));
-
-		AddWork(new WSMessageWork(session, message));
+	void Server::OnMessage(BaseServer::handle_type handle, BaseServer::message_type message) {
+		AddWork(std::make_shared<WSMessageWork>(handle, message));
 	}
 
 	void Server::OnClose(BaseServer::handle_type handle) {
-		auto& session = WebsocketServer::GetSessionFromHandle(handle);
-
-		AddWork(new ConnectionRemoveWork(session));
+		AddWork(std::make_shared<ConnectionRemoveWork>(handle));
 	}
 
 	IPData* Server::FindIPData(net::ip::address& address) {
@@ -184,43 +176,55 @@ namespace CollabVM {
 			while(work.empty())
 				WorkReady.wait(lock);
 
-			IWork* action = work.front();
+			std::shared_ptr<IWork> action = work.front();
 			work.pop_front();
 
+			// Process work based on what work type it is.
 			switch(action->type) {
 				case WorkType::AddConnection: {
 					std::lock_guard<std::mutex> lock(UsersLock);
-					ConnectionAddWork* add = (ConnectionAddWork*)action;
-					auto address = add->session.GetAddress();
+					ConnectionAddWork* add = (ConnectionAddWork*)action.get();
+					auto address = add->handle->GetAddress();
 
 					IPData* data = FindIPData(address);
 					
-						
-					users[&add->session] = new User(add->session, data);
+					// create user structure
+					users[add->handle] = std::make_shared<User>(add->handle, data);
 					logger.info("User Connected (IP: ", data->str(), ")");
 				} break;
 					
 				case WorkType::RemoveConnection: {
 					std::lock_guard<std::mutex> lock(UsersLock);
-					ConnectionRemoveWork* add = (ConnectionRemoveWork*)action;
+					ConnectionRemoveWork* remove = (ConnectionRemoveWork*)action.get();
+					auto it = users.find(remove->handle);
 
-					auto it = users.find(&add->session);
-					
+					if(it == users.end())
+						break; // stop but still free the action memory
+
 					IPData* data = FindIPData(it->second->ipData->address);
 
 					// decrement connection count in IPData
-					data->connection_count--;
+					if(data)
+						data->connection_count--;
 
 					logger.info("User Disconnect (IP: ", it->second->ipData->str(), ")");
 
-					if(it->second)
-						delete it->second;
+					// TODO (when vms work): disconnect user from vms so that reference count drops down to just work thread
+					// so that it becomes possible to delete when reset is called and/or we become the thread that deletes it
 
 					users.erase(it);
+					remove->handle.reset();
 				} break;
 
 				case WorkType::Message: {
-					WSMessageWork* msg = (WSMessageWork*)action;
+					WSMessageWork* msg = (WSMessageWork*)action.get();
+					auto user = users.find(msg->handle)->second;
+
+					// TODO:
+					
+					logger.info("message: ", beast::buffers_to_string(msg->message->buffer.data()));
+
+					msg->message.reset();
 				} break;
 
 				default:
@@ -229,7 +233,8 @@ namespace CollabVM {
 			}
 
 			// delete memory to avoid leaks
-			delete action;
+			// (we end up being the only one who owns the memory, so we get to delete it)
+			action.reset();
 		}
 	}
 

@@ -4,9 +4,16 @@
 
 namespace CollabVM {
 
+	// enum for user type
+	// NOTE: This enum must be synced with the flatbuffers one!
 	enum class UserType : byte {
+		// A guest user.
 		Guest,
+
+		// A registered user.
 		Registered,
+
+		// An administrator.
 		Admin
 	};
 
@@ -15,8 +22,10 @@ namespace CollabVM {
 		// The IP address.
 		net::ip::address address;
 
-		// Amount of connections
+		// Amount of connections from this IP address.
 		uint64 connection_count = 0;
+
+		// more fields here as they're needed
 
 		IPData(net::ip::address& addr)
 			: address(addr) {
@@ -24,17 +33,18 @@ namespace CollabVM {
 		}
 
 		// returns true if the IPData
-		// is safe to delete
+		// is safe to be cleaned up.
 		inline bool SafeToDelete() {
 			return connection_count == 0;
 		}
 
 		inline std::string str() {
-			if (address.is_v4())
+			if (address.is_v4()) {
 				return address.to_v4().to_string();
-			else if (address.is_v6()) {
+			} else if (address.is_v6()) {
 				if(address.to_v6().is_v4_mapped())
 					return address.to_v4().to_string();
+
 				return address.to_v6().to_string();
 			}
 
@@ -43,17 +53,21 @@ namespace CollabVM {
 		}
 	};
 
-
+	// User data structure
 	struct User {
 
-		User(WSSession& session, IPData* ipdata)
-			: session(session), ipData(ipdata) {
+		User(WebsocketServer::handle_type handle, IPData* ipdata)
+			: handle(handle), ipData(ipdata) {
 			type = UserType::Guest;
 		}
 
-		// session
-		WSSession& session;
+		~User() {
+			// release ownership of session handle
+			handle.reset();
+		}
 
+		// handle to session
+		WebsocketServer::handle_type handle;
 
 		// IPData of the user.
 		IPData* ipData;

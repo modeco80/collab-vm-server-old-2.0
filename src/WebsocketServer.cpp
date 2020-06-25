@@ -4,10 +4,7 @@ using namespace std::placeholders;
 
 namespace CollabVM {
 
-	// NOTE: This function isn't templated like ws_server_fast
-	// because we explicitly use the stream_type typedef
-	// .. so there doesn't need to be any other instanation.
-	inline void ConfigureStream(WebsocketServer::stream_type& stream) {
+	inline void ConfigureStream(ws::stream<beast::tcp_stream>& stream) {
 		// Enable the WebSocket permessage deflate extension.
 		ws::permessage_deflate pmd;
 		pmd.client_enable = true;
@@ -18,9 +15,33 @@ namespace CollabVM {
 		stream.auto_fragment(false);
 	}
 
+	// return a mime type for the specific file
+	inline beast::string_view MimeType(beast::string_view path) {
+		auto ext = [&path] {
+			auto const pos = path.rfind(".");
+			if(pos == beast::string_view::npos)
+				return beast::string_view{};
+			return path.substr(pos);
+		}();
+#define EXT(extension, mime) if(beast::iequals(ext, extension)) return mime;
+		// Subset that should be "good" enough
+		EXT(".htm", "text/html")
+		EXT(".html", "text/html")
+		EXT(".htm", "text/html")
+		EXT(".css", "text/css")
+		EXT(".txt", "text/plain")
+		EXT(".js", "application/javascript")
+		EXT(".json", "application/json")
+		EXT(".png", "image/png")
+		EXT(".ico", "image/vnd.microsoft.icon")
+#undef EXT
+		return "application/text";
+	}
+
 	// WSSession
 
 	void WSSession::Run(http::request<http::string_body> req) {
+		// already running on the right strand
 		SessionStart(req);
 	}
 
@@ -39,10 +60,10 @@ namespace CollabVM {
 			res.set(http::field::server, "collab-vm-server/2.0");
 		}));
 
-		stream.async_accept(req, beast::bind_front_handler(&WSSession::OnAccept, this));
+		stream.async_accept(req, beast::bind_front_handler(&WSSession::OnAccept, shared_from_this()));
 	}
 
-	WebsocketServer::stream_type& WSSession::GetStream() {
+	ws::stream<beast::tcp_stream>& WSSession::GetStream() {
 		return stream;
 	}
 
@@ -52,18 +73,18 @@ namespace CollabVM {
 
 		logger.verbose("Accepted session for ", GetAddress().to_string());
 
-		server->OnOpen(this);
+		server->OnOpen(shared_from_this());
 
 		Read();
 	}
 
 	void WSSession::Read() {
-		stream.async_read(buf, beast::bind_front_handler(&WSSession::OnRead, this));
+		stream.async_read(buf, beast::bind_front_handler(&WSSession::OnRead, shared_from_this()));
 	}
 
 	void WSSession::OnRead(beast::error_code ec, std::size_t bytes_transferred) {
 		if(ec == ws::error::closed) {
-			CloseSession();
+			server->OnClose(shared_from_this());
 			return;
 		}
 
@@ -71,46 +92,46 @@ namespace CollabVM {
 			return;
 
 		// make message
-		message = WSMessage { stream.got_text(), buf };
+		auto message = std::make_shared<WSMessage>(stream.got_binary(), buf);
 
-		server->OnMessage(this, message);
-
+		// clean this buffer, it's been copied to the wrapper
 		buf.consume(buf.size());
+
+		server->OnMessage(shared_from_this(), message);
 
 		Read();
 	}
 
-	void WSSession::Send(WebsocketServer::message_type& message) {
-		if (message.binary)
+	void WSSession::Send(WebsocketServer::message_type message) {
+		if (message->binary)
 			stream.binary(true);
 		else
 			stream.text(true);
 
-		stream.async_write(message.message.data(), beast::bind_front_handler(&WSSession::OnSend, this));
+		stream.async_write(message->buffer.data(), beast::bind_front_handler(&WSSession::OnSend, shared_from_this()));
 	}
 
 	void WSSession::OnSend(beast::error_code ec, std::size_t bytes_transferred) {
 		if(ec == ws::error::closed)
-			CloseSession();
+			server->OnClose(shared_from_this());
 	}
 
-	struct HTTPSession {
+	// http session
+	struct HTTPSession : public std::enable_shared_from_this<HTTPSession> {
 		
 		explicit HTTPSession(WebsocketServer* server, tcp::socket&& socket)
 			: server(server), stream(std::move(socket)) {
 		
 		}
-	
+
 		void Run() {
 			// Ensure we're on the right strand
-			net::dispatch(stream.get_executor(), beast::bind_front_handler(&HTTPSession::Read, this));
+			net::dispatch(stream.get_executor(), beast::bind_front_handler(&HTTPSession::Read, shared_from_this()));
 		}
 
 		void Close() {
 			beast::error_code ec;
 			stream.socket().shutdown(tcp::socket::shutdown_send, ec);
-
-			server->OnHttpClose(this);
 		}
 
 	private:
@@ -118,7 +139,7 @@ namespace CollabVM {
 		void Read() {
 			req = {};
 
-			http::async_read(stream, request_buffer, req, beast::bind_front_handler(&HTTPSession::OnRead, this));
+			http::async_read(stream, request_buffer, req, beast::bind_front_handler(&HTTPSession::OnRead, shared_from_this()));
 		}
 
 		void OnRead(beast::error_code ec, size_t bytes_written) {
@@ -131,27 +152,26 @@ namespace CollabVM {
 			if (ws::is_upgrade(req)) {
 
 				auto subprotocols = http::token_list(req[http::field::sec_websocket_protocol]);
+				auto session = std::make_shared<WSSession>(stream.release_socket(), server, subprotocols);
 
-				server->sessions.push_back(new WSSession(std::move(stream.socket()), server, subprotocols));
-
-				// Hold pointer to session
-				auto session = server->sessions.back();
-
-				// At this point, there is no actual Websocket connection ready quite yet,
-				// but we can verify if the user has the right subprotocol and/or any limits.
+				// At this point, there is no actual Websocket connection made,
+				// but we can verify if the user is handshaking the right subprotocol 
+				// and/or any limits need to be applied by the actual server code.
 				//
 				// If the verify callback returns false, then we should close the session
 				// and wait for another accept.
 				if (!server->OnVerify(session)) {
-					session->CloseSession();
+					Close();
 					return;
 				}
 
 				session->Run(req);
 			} else {
 				// TODO: implement a basic static file host. (NOTE: make sure to allow chunk/resume stuff?
-
-				logger.info(stream.socket().remote_endpoint().address().to_string(), " Requested ", req.target());
+				auto target = req.target();
+				auto address = stream.socket().remote_endpoint().address().to_string();
+				
+				logger.info(address, " Requested ", target);
 				http::response<http::string_body> res;
 
 				res.result(http::status::ok);
@@ -166,7 +186,7 @@ namespace CollabVM {
 				});
 			}
 
-			//Read();
+			// Session stops existing after this
 		}
 		
 		// Handle to the WebsocketServer
@@ -183,7 +203,7 @@ namespace CollabVM {
 		Logger logger = Logger::GetLogger("HTTP");
 	};
 
-	struct Listener {
+	struct Listener : public std::enable_shared_from_this<Listener> {
 
 		Listener(net::io_service& ioc, tcp::endpoint& ep, WebsocketServer* srv)
 			: ioc(ioc),
@@ -203,7 +223,8 @@ namespace CollabVM {
 	private:
 
 		void DoAccept() {
-			acceptor.async_accept(net::make_strand(ioc), beast::bind_front_handler(&Listener::OnAccept, this));
+			// new connection runs on its own strand
+			acceptor.async_accept(net::make_strand(ioc), beast::bind_front_handler(&Listener::OnAccept, shared_from_this()));
 		}
 
 
@@ -211,12 +232,7 @@ namespace CollabVM {
 			if(ec)
 				return;
 			
-			std::lock_guard<std::mutex> lock(server->SessionsLock);
-			
-			server->http_sessions.push_back(new HTTPSession(server, std::move(socket_)));
-			auto session = server->http_sessions.back();
-
-			session->Run();
+			std::make_shared<HTTPSession>(server, std::move(socket_))->Run();
 
 			// accept another connection after we start the HTTP session
 			DoAccept();
@@ -237,73 +253,14 @@ namespace CollabVM {
 
 		wsLogger.info("Starting server on ", ep.address().to_string() ,":", ep.port());
 
-		listener = new Listener(*io_service, ep, this);
+		listener = std::make_shared<Listener>(*io_service, ep, this);
 		listener->Run();
 		io_service->run();
 	}
 
 
 	void WebsocketServer::Stop() {
-		if (listener)
-			delete listener;
+		listener.reset();
 	}
 
-	void WebsocketServer::Broadcast(message_type& message) {
-		std::lock_guard<std::mutex> lock(SessionsLock);
-
-		for(auto session : sessions)
-			session->Send(message);
-	}
-
-	void WebsocketServer::OnSessionClose(WSSession* session) {
-		if(!session)
-			return;
-
-		std::lock_guard<std::mutex> lock(SessionsLock);
-
-		// find session in list
-		auto FindSession = [&]() {
-			for (auto it = sessions.begin(); it != sessions.end(); ++it)
-				if (*it == session)
-					return it;
-
-			return sessions.end();
-		};
-
-		auto it = FindSession();
-
-		// call close handler before removing session
-		OnClose(*it);
-
-		if(it != sessions.end()) {
-			// remove session and free it
-			delete (*it);
-			sessions.erase(it);
-		}
-	}	
-	
-	void WebsocketServer::OnHttpClose(HTTPSession* session) {
-		if(!session)
-			return;
-
-		std::lock_guard<std::mutex> lock(SessionsLock);
-
-		// find session in list
-		auto FindSession = [&]() {
-			for (auto it = http_sessions.begin(); it != http_sessions.end(); ++it)
-				if (*it == session)
-					return it;
-
-			return http_sessions.end();
-		};
-
-		auto it = FindSession();
-
-
-		if(it != http_sessions.end()) {
-			// remove session and free it
-			delete (*it);
-			http_sessions.erase(it);
-		}
-	}
 }

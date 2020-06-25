@@ -6,24 +6,24 @@
 #include <boost/program_options.hpp>
 
 using namespace CollabVM;
-
 namespace po = boost::program_options;
 
 std::string laddr = "0.0.0.0";
+std::string webroot = "http";
 uint16 port = 6004;
 
 net::ip::address address;
-
 net::io_service ioc;
-net::io_service::work* work;
-Server* server;
+
+std::shared_ptr<net::io_service::work> work;
+std::shared_ptr<Server> server;
 
 Logger mainlogger = Logger::GetLogger("Main");
 
 void StopServer() {
-	delete work;
+	work.reset();
 	server->Stop();
-	delete server;
+	server.reset();
 }
 
 template<typename F>
@@ -32,6 +32,7 @@ inline void Worker(F function) {
 		function();
 	} catch(std::exception& ex) {
 		mainlogger.error("Got exception: ", ex.what());
+		StopServer();
 	}
 }
 
@@ -89,9 +90,8 @@ int main(int argc, char** argv) {
 	if(vm.count("verbose"))
 		Logger::AllowVerbose = true;
 
-	work = new net::io_service::work(ioc);
-
-	server = new Server(ioc);
+	work = std::make_shared<net::io_service::work>(ioc);
+	server = std::make_shared<Server>(ioc);
 
 	std::thread thread([]() {
 		Worker([]() {
@@ -105,6 +105,7 @@ int main(int argc, char** argv) {
 	});
 
 	thread.join();
-	delete server;
+
+	StopServer();
 	return 0;
 }

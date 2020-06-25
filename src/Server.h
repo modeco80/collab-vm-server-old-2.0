@@ -25,29 +25,29 @@ namespace CollabVM {
 	};
 	
 	struct ConnectionAddWork : public IWork {
-		WSSession& session;
+		WebsocketServer::handle_type handle;
 
-		ConnectionAddWork(WSSession& session) 
-			: IWork(WorkType::AddConnection), session(session) {
+		ConnectionAddWork(WebsocketServer::handle_type handle) 
+			: IWork(WorkType::AddConnection), handle(handle) {
 		}
 
 	};	
 
 	struct ConnectionRemoveWork : public IWork {
-		WSSession& session;
+		WebsocketServer::handle_type handle;
 
-		ConnectionRemoveWork(WSSession& session) 
-			: IWork(WorkType::RemoveConnection), session(session) {
+		ConnectionRemoveWork(WebsocketServer::handle_type handle) 
+			: IWork(WorkType::RemoveConnection), handle(handle) {
 		}
 
 	};
 
 	struct WSMessageWork : public IWork {
-		WSSession& session;
-		WSMessage message;
+		WebsocketServer::handle_type handle;
+		WebsocketServer::message_type message;
 
-		WSMessageWork(WSSession& session, WSMessage& message)
-			: IWork(WorkType::Message), session(session), message(message) {
+		WSMessageWork(WebsocketServer::handle_type handle, WebsocketServer::message_type message)
+			: IWork(WorkType::Message), handle(handle), message(message) {
 		
 		}
 	
@@ -72,18 +72,18 @@ namespace CollabVM {
 
 		void OnOpen(BaseServer::handle_type handle);
 
-		void OnMessage(BaseServer::handle_type handle, BaseServer::message_type& message);
+		void OnMessage(BaseServer::handle_type handle, BaseServer::message_type message);
 
 		void OnClose(BaseServer::handle_type handle);
 
 		// Shorthand to add work to the work queue
-		inline void AddWork(IWork* newWork) {
+		inline void AddWork(std::shared_ptr<IWork> newWork) {
 			// Only add action to the work queue if
 			// the work to add isn't nullptr
 			if(newWork) {
-				std::lock_guard<std::mutex> lock(WorkLock);
+				//std::lock_guard<std::mutex> lock(WorkLock);
 
-				work.push_back((IWork*)newWork);
+				work.push_back(newWork);
 				WorkReady.notify_one();
 			}
 		}
@@ -125,12 +125,14 @@ namespace CollabVM {
 
 		// deque of work
 		// locked by workLock
-		std::deque<IWork*> work;
+		std::deque<std::shared_ptr<IWork>> work;
 
 		
 		std::mutex IPDataLock;
 
 		net::steady_timer IPDataCleanupTimer;
+
+		// TODO: make thse shared_ptrs along with *everything* else
 
 		// IPv4 IPData
 		std::map<uint64, IPData*> ipv4data;
@@ -142,7 +144,7 @@ namespace CollabVM {
 		std::mutex UsersLock;
 
 		// maps handles of streams to users
-		std::map<WebsocketServer::handle_type, User*> users;
+		std::map<WebsocketServer::handle_type, std::shared_ptr<User>> users;
 
 		// logger
 		Logger logger = Logger::GetLogger("CollabVMServer");
