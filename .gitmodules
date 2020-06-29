@@ -1,3 +1,6 @@
 [submodule "vendor/collab-vm-common"]
 	path = vendor/collab-vm-common
 	url = https://github.com/modeco80/collab-vm-common.git
+[submodule "vendor/libvncserver"]
+	path = vendor/libvncserver
+	url = https://github.com/modeco80/libvncserver

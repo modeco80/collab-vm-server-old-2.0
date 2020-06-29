@@ -11,8 +11,10 @@ namespace CollabVM {
 
 	// basic wrapper over beast::flat_buffer
 	struct WSMessage {
-		inline WSMessage(bool binary, beast::flat_buffer message)
-			: binary(binary), buffer(message) {}
+
+		inline ~WSMessage() {
+			buffer.clear();
+		}
 
 		bool binary;
 		beast::flat_buffer buffer;
@@ -37,6 +39,7 @@ namespace CollabVM {
 			: io_service(&ioc) {
 			
 		}
+
 
 		void Start(tcp::endpoint& ep);
 
@@ -83,7 +86,7 @@ namespace CollabVM {
 
 		void Read();
 
-		void OnRead(beast::error_code ec, std::size_t bytes_transferred);
+		void OnRead( WebsocketServer::message_type message, beast::error_code ec, std::size_t bytes_transferred);
 
 		// send a message
 		void Send(WebsocketServer::message_type message);
@@ -100,6 +103,7 @@ namespace CollabVM {
 
 		// Get address
 		inline net::ip::address GetAddress() {
+			// TODO: read todo in .cpp
 			return stream.next_layer().socket().remote_endpoint().address();
 		}
 
@@ -129,9 +133,6 @@ namespace CollabVM {
 
 		// this session's stream
 		ws::stream<beast::tcp_stream> stream;
-
-		// buffer for this session
-		beast::flat_buffer buf;
 
 		Logger logger = Logger::GetLogger("WebsocketSession");
 	};

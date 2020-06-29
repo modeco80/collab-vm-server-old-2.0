@@ -45,9 +45,15 @@ int main(int argc, char** argv) {
 		("verbose", "Enable verbose debug logging")
 		("version", "Output version of CollabVM Server")
 		("listen", po::value<std::string>(),  "Listen address (default 0.0.0.0)")
-		("port", po::value<decltype(port)>(), "Server port (default 6004)");
+		("port", po::value<uint16>(), "Server port (default 6004)");
 
-	po::store(po::parse_command_line(argc, argv, desc), vm);
+	try {
+		po::store(po::parse_command_line(argc, argv, desc), vm);
+	} catch(po::error_with_option_name& er) {
+		std::cout << "Invalid option " << er.get_option_name() << ".\n";
+		return 1;
+	}
+
 	po::notify(vm);
 
 	if(vm.count("help")) {
@@ -70,7 +76,7 @@ int main(int argc, char** argv) {
 		try {
 			laddr = vm["listen"].as<std::string>();
 		} catch(...) {
-			std::cout << "Error: invalid listen address\n";
+			std::cout << "Invalid listen address\n";
 			return 1;
 		}
 	}
@@ -81,12 +87,12 @@ int main(int argc, char** argv) {
 		try {
 			port = vm["port"].as<uint16>();
 		} catch (...) {
-			std::cout << "Error: Port specified is invalid\n";
+			std::cout << "Invalid port specified\n";
 			return 1;
 		}
 	}
 
-	// allow verbose messages on all "channels"
+	// allow verbose messages on all channels
 	if(vm.count("verbose"))
 		Logger::AllowVerbose = true;
 

@@ -27,14 +27,6 @@ namespace CollabVM {
 		std::lock_guard<std::mutex> ulock(UsersLock);
 		std::lock_guard<std::mutex> ilock(IPDataLock);
 
-		for(auto& ip : ipv4data)
-			if(ip.second)
-				delete ip.second;
-
-		for(auto& ip : ipv6data)
-			if(ip.second)
-				delete ip.second;
-
 		for (auto& user : users)
 			if (user.second)
 				user.second.reset();

@@ -27,7 +27,6 @@ namespace CollabVM {
 		// Subset that should be "good" enough
 		EXT(".htm", "text/html")
 		EXT(".html", "text/html")
-		EXT(".htm", "text/html")
 		EXT(".css", "text/css")
 		EXT(".txt", "text/plain")
 		EXT(".js", "application/javascript")
@@ -37,6 +36,7 @@ namespace CollabVM {
 #undef EXT
 		return "application/text";
 	}
+
 
 	// WSSession
 
@@ -79,11 +79,15 @@ namespace CollabVM {
 	}
 
 	void WSSession::Read() {
-		stream.async_read(buf, beast::bind_front_handler(&WSSession::OnRead, shared_from_this()));
+		// make message
+		auto message = std::make_shared<WSMessage>();
+
+		stream.async_read(message->buffer, beast::bind_front_handler(&WSSession::OnRead, shared_from_this(), message));
 	}
 
-	void WSSession::OnRead(beast::error_code ec, std::size_t bytes_transferred) {
+	void WSSession::OnRead(WebsocketServer::message_type message, beast::error_code ec, std::size_t bytes_transferred) {
 		if(ec == ws::error::closed) {
+			message.reset();
 			server->OnClose(shared_from_this());
 			return;
 		}
@@ -91,11 +95,7 @@ namespace CollabVM {
 		if(ec)
 			return;
 
-		// make message
-		auto message = std::make_shared<WSMessage>(stream.got_binary(), buf);
-
-		// clean this buffer, it's been copied to the wrapper
-		buf.consume(buf.size());
+		message->binary = stream.got_binary();
 
 		server->OnMessage(shared_from_this(), message);
 
@@ -129,10 +129,6 @@ namespace CollabVM {
 			net::dispatch(stream.get_executor(), beast::bind_front_handler(&HTTPSession::Read, shared_from_this()));
 		}
 
-		void Close() {
-			beast::error_code ec;
-			stream.socket().shutdown(tcp::socket::shutdown_send, ec);
-		}
 
 	private:
 
@@ -143,52 +139,81 @@ namespace CollabVM {
 		}
 
 		void OnRead(beast::error_code ec, size_t bytes_written) {
-			if (ec == http::error::end_of_stream)
-				Close();
+			if (ec == http::error::end_of_stream) {
+				beast::error_code ec;
+				stream.socket().shutdown(tcp::socket::shutdown_send, ec);
+			}
 
 			if (ec)
 				return;
+
+			// TODO: here would be a good place to add code to check for the X-Forwarded-For
+			// header. If this is found, we could have a optional shared_ptr<net::ip::address> argument or something
+			// that overrides what IP address the server will treat the user as using
 
 			if (ws::is_upgrade(req)) {
 
 				auto subprotocols = http::token_list(req[http::field::sec_websocket_protocol]);
 				auto session = std::make_shared<WSSession>(stream.release_socket(), server, subprotocols);
 
-				// At this point, there is no actual Websocket connection made,
-				// but we can verify if the user is handshaking the right subprotocol 
-				// and/or any limits need to be applied by the actual server code.
+				// At this point, there is no actual Websocket connection handshaked,
+				// but we can have the server verify if this connection should be accepted.
 				//
 				// If the verify callback returns false, then we should close the session
 				// and wait for another accept.
 				if (!server->OnVerify(session)) {
-					Close();
+					beast::error_code ec;
+					stream.socket().shutdown(tcp::socket::shutdown_send, ec);
 					return;
 				}
 
 				session->Run(req);
 			} else {
 				// TODO: implement a basic static file host. (NOTE: make sure to allow chunk/resume stuff?
+				// (above todo may be discarded..)
 				auto target = req.target();
 				auto address = stream.socket().remote_endpoint().address().to_string();
-				
-				logger.info(address, " Requested ", target);
 				http::response<http::string_body> res;
 
-				res.result(http::status::ok);
-				res.body() = "CollabVM 2.0";
+				res.set(http::field::server, "collab-vm-server/2.0");
+				
+				logger.info(address, " Requested (", req.method_string() , ") ", target);
 
-				http::async_write(stream.socket(), res, [&](beast::error_code ec, std::size_t) {
-					if (ec)
-						return;
+				switch(req.method()) {
+					case http::verb::get:
+						res.result(http::status::ok);
+						res.body() = "CollabVM 2.0";
+						break;
 
-					// Close regardless of the header. We don't care (yet)
-					Close();
-				});
+					case http::verb::head:
+						res.result(http::status::ok);
+						break;
+
+					default: {
+						res.result(http::status::bad_request);
+						res.body() = "Bad Request";
+					} break;
+				}
+
+				Write(res);
 			}
 
 			// Session stops existing after this
 		}
 		
+		void Write(http::response<http::string_body>& response) {
+			beast::error_code ec;
+			http::write(stream.socket(), response, ec);
+			
+			if(ec)
+				return;
+
+			if(req.need_eof()) {
+				beast::error_code ec;
+				stream.socket().shutdown(tcp::socket::shutdown_send, ec);
+			}
+		}
+
 		// Handle to the WebsocketServer
 		// that created us.
 		WebsocketServer* server;
@@ -232,7 +257,8 @@ namespace CollabVM {
 			if(ec)
 				return;
 			
-			std::make_shared<HTTPSession>(server, std::move(socket_))->Run();
+			auto session = std::make_shared<HTTPSession>(server, std::move(socket_));
+			session->Run();
 
 			// accept another connection after we start the HTTP session
 			DoAccept();
@@ -253,6 +279,8 @@ namespace CollabVM {
 
 		wsLogger.info("Starting server on ", ep.address().to_string() ,":", ep.port());
 
+		// The listener doesn't have to worry about freeing,
+		// the WebsocketServer will handle that
 		listener = std::make_shared<Listener>(*io_service, ep, this);
 		listener->Run();
 		io_service->run();

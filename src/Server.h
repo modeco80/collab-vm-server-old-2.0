@@ -81,6 +81,9 @@ namespace CollabVM {
 			// Only add action to the work queue if
 			// the work to add isn't nullptr
 			if(newWork) {
+				// TODO: This lock needs to somehow be re-added. Otherwise,
+				// things might fall down and go boom
+
 				//std::lock_guard<std::mutex> lock(WorkLock);
 
 				work.push_back(newWork);
@@ -99,24 +102,18 @@ namespace CollabVM {
 
 		inline void StartIPDataTimer() {
 			IPDataCleanupTimer.expires_after(net::steady_timer::duration(IPDataTimeout));
-			IPDataCleanupTimer.async_wait(std::bind(&Server::CleanupIPData, this));
+			IPDataCleanupTimer.async_wait(std::bind(&Server::CleanupIPData, shared_from_this()));
 		}
 
 		// TODO figure out how to make these constexpr
 
+		// Timeout in seconds when the IPData will be cleaned up.
 		const std::chrono::seconds IPDataTimeout = std::chrono::seconds(5);
 
-		// Timeout in seconds of when a user will be disconnected.
-		// TODO: Instead of using a special `nop` instruction,
-		// use the built-in Websocket ping frames.
-		const std::chrono::seconds PingTimeout = std::chrono::seconds(15);
 
-		// processing thread
+		// Thread performing work.
 		std::thread WorkThread;
 
-		// mutex locking work
-		// if locked by thread, thread
-		// can modify to it's own will
 		std::mutex WorkLock;
 
 		std::condition_variable WorkReady;
@@ -143,7 +140,7 @@ namespace CollabVM {
 		
 		std::mutex UsersLock;
 
-		// maps handles of streams to users
+		// Map of handles to users
 		std::map<WebsocketServer::handle_type, std::shared_ptr<User>> users;
 
 		// logger

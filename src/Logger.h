@@ -8,7 +8,7 @@ namespace CollabVM {
 
 	struct Logger {
 
-		// get a logger with a group name
+		// get a logger channel
 		static Logger GetLogger(std::string group_name) {
 			Logger l;
 			l.group_name = group_name;
@@ -16,7 +16,7 @@ namespace CollabVM {
 		}
 
 		// Allow verbose messages
-		// NOTE: This applies to all groups made with Logger::GetLogger()
+		// NOTE: This applies to all channels.
 		static bool AllowVerbose;
 
 		// Logging functions
