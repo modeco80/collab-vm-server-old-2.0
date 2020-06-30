@@ -31,15 +31,12 @@
 #include <cairo/cairo.h>
 
 #include <jpeglib.h>
-#include <turbojpeg.h>
+
+#ifdef LIBJPEG_TURBO_VERSION
+	#include <turbojpeg.h>
+#endif
 
 #include "cairo_jpg.h"
-
-/*! Define this to use an alternate implementation of
- * cairo_image_surface_create_from_jpeg() which fstat(3)s the file before
- * reading (see below). For huge files this /may/ be slightly faster.
- */
-#undef CAIRO_JPEG_USE_FSTAT
 
 /*! This is the read block size for the stream reader
  * cairo_image_surface_create_from_jpeg_stream().
@@ -60,18 +57,10 @@
 #endif
 #endif
 
-/*! Define this to test jpeg creation with non-image surfaces. This is only for
- * testing and is to be used together with CAIRO_JPEG_MAIN.  
- */
-#undef CAIRO_JPEG_TEST_SIMILAR
-#if defined(CAIRO_JPEG_TEST_SIMILAR) && defined(CAIRO_JPEG_MAIN)
-#include <cairo-pdf.h>
-#endif
-
+#ifndef LIBJPEG_TURBO_VERSION
 /*
  * Internal implementation of jpeg_mem_src and other functions
  * taken from the TurboJPEG source code.
- * TODO: define jpeg_mem_src_() to the turbojpeg ones if turbojpeg is in use
  */
 
 void init_mem_source_(j_decompress_ptr cinfo)
@@ -144,7 +133,8 @@ void jpeg_mem_src_(j_decompress_ptr cinfo, unsigned char* inbuffer, unsigned lon
   src->bytes_in_buffer = (size_t) insize;
   src->next_input_byte = (JOCTET *) inbuffer;
 }
-
+#define jpeg_mem_src jpeg_mem_src_
+#endif
 
 #ifndef LIBJPEG_TURBO_VERSION
 /*! This function makes a covnersion for "odd" pixel sizes which typically is a
@@ -393,7 +383,7 @@ cairo_surface_t *cairo_image_surface_create_from_jpeg_mem(void *data, size_t len
    // initialize jpeg decompression structures
    cinfo.err = jpeg_std_error(&jerr);
    jpeg_create_decompress(&cinfo);
-   jpeg_mem_src_(&cinfo, data, len);
+   jpeg_mem_src(&cinfo, data, len);
    (void) jpeg_read_header(&cinfo, TRUE);
 
 #ifdef LIBJPEG_TURBO_VERSION

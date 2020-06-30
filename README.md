@@ -17,6 +17,7 @@ First, clone this repository with `--recursive` added to `git clone`. This will 
 
 ## Linux
 
+<!-- I really need to update these... -->
 #### Debian/Ubuntu
 `sudo apt install libboost-all-dev`
 
@@ -27,7 +28,7 @@ First, clone this repository with `--recursive` added to `git clone`. This will 
 
 ## Windows
 
-Install vcpkg and run `vcpkg install boost:x64-windows` (example) or compile boost by hand.
+Install vcpkg and run `vcpkg install boost:x64-windows cairo:x64-windows libjpeg-turbo:x64-windows` (example) or compile boost by hand.
 
 on Windows, you can use the CMake tools Visual Studio provides with vcpkg integrations installed.
 

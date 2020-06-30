@@ -20,19 +20,16 @@ jobs:
       id: cache-vcpkg
       with:
         path: "~/vcpkg"
-        key: cache-vcpkg-${{runner.os}}
+        key: deps-${{runner.os}}
     - name: Install vcpkg and boost if needed
-      env:
-        CACHE_HIT: ${{steps.cache-vcpkg.outputs.cache-hit}}
+      if: steps.cache-vcpkg.outputs.cache-hit != 'true'
       run: |
-        if [[ "$CACHE_HIT" == '' ]]; then
             cd
             git clone https://github.com/Microsoft/vcpkg
             cd vcpkg
             ./bootstrap-vcpkg.sh -disableMetrics
-            ./vcpkg install boost:x64-linux
+            ./vcpkg install boost:x64-linux cairo:x64-linux libjpeg-turbo:x64-linux
             cd ~/work/collab-vm-server
-        fi
     - name: Generate CMake build files
       run: |
         mkdir build 
