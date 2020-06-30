@@ -23,7 +23,11 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <unistd.h>
+
+#ifndef _WIN32
+	#include <unistd.h>
+#endif
+
 #include <cairo/cairo.h>
 
 #include <jpeglib.h>
@@ -47,10 +51,13 @@
  * to detect EOF (truncated reads).
  */
 #define CAIRO_JPEG_IO_BLOCK_SIZE 1
+
+#ifndef _WIN32
 /*! In case of original cairo_read_func_t is used fstat() should be used for
  * performance reasons (see CAIRO_JPEG_USE_FSTAT above).
  */
 #define CAIRO_JPEG_USE_FSTAT
+#endif
 #endif
 
 /*! Define this to test jpeg creation with non-image surfaces. This is only for
@@ -346,6 +353,7 @@ cairo_status_t cairo_image_surface_write_to_jpeg_stream(cairo_surface_t *sfc, ca
  */
 cairo_status_t cairo_image_surface_write_to_jpeg(cairo_surface_t *sfc, const char *filename, int quality)
 {
+#ifndef _WIN32
    cairo_status_t e;
    int outfile;
 
@@ -359,6 +367,10 @@ cairo_status_t cairo_image_surface_write_to_jpeg(cairo_surface_t *sfc, const cha
    // close file again and return
    close(outfile);
    return e;
+#else
+	// Unsupported on Win32 for the time being
+	return CAIRO_STATUS_WRITE_ERROR;
+#endif
 }
 
 
@@ -447,7 +459,7 @@ cairo_surface_t *cairo_image_surface_create_from_jpeg_stream(cairo_read_func_t r
 #endif
 {
    void *data, *tmp;
-   ssize_t len, rlen;
+   size_t len, rlen;
    int eof = 0;
 
    // read all data into memory buffer in blocks of CAIRO_JPEG_IO_BLOCK_SIZE 
@@ -459,7 +471,7 @@ cairo_surface_t *cairo_image_surface_create_from_jpeg_stream(cairo_read_func_t r
 	  data = tmp;
 
 	  // read bytes into buffer and check for error
-	  rlen = read_func(closure, data + len, CAIRO_JPEG_IO_BLOCK_SIZE);
+	  rlen = read_func(closure, (char*)data + len, CAIRO_JPEG_IO_BLOCK_SIZE);
 #ifdef USE_CAIRO_READ_FUNC_LEN_T
 	  // check for error
 	  if (rlen == -1)

@@ -102,7 +102,7 @@ namespace CollabVM {
 
 		inline void StartIPDataTimer() {
 			IPDataCleanupTimer.expires_after(net::steady_timer::duration(IPDataTimeout));
-			IPDataCleanupTimer.async_wait(std::bind(&Server::CleanupIPData, shared_from_this()));
+			IPDataCleanupTimer.async_wait(std::bind(&Server::CleanupIPData, this));
 		}
 
 		// TODO figure out how to make these constexpr
