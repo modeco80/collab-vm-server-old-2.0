@@ -21,6 +21,7 @@ std::shared_ptr<Server> server;
 Logger mainlogger = Logger::GetLogger("Main");
 
 void StopServer() {
+	ioc.stop();
 	work.reset();
 	server->Stop();
 	server.reset();
