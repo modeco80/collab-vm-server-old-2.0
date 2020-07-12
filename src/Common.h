@@ -31,13 +31,15 @@ namespace CollabVM {
 	typedef std::uint64_t uint64;
 	typedef std::int64_t int64;
 
-	// Call a std::function if function is actually bound to something
+	// Call a function object
+	// if the function object is valid
 	template<typename Function, class ...Args>
 	inline void CheckedFunctionCall(const Function& func, Args... args) {
 		if(func)
 			func(std::forward(args)...);
 	}
 }
+
 
 // Include sdkddkver.h
 // to make Boost.Asio not spew warnings about it

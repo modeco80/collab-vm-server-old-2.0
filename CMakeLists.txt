@@ -19,6 +19,9 @@ set(FLATBUFFERS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(FLATBUFFERS_BUILD_FLATHASH OFF CACHE BOOL "" FORCE)
 set(FLATBUFFERS_STATIC_FLATC ON CACHE BOOL "" FORCE)
 set(FLATBUFFERS_INSTALL OFF CACHE BOOL "" FORCE)
+
+set(FLATBUFFERS_FLATC_SCHEMA_EXTRA_ARGS --gen-object-api --gen-name-strings --scoped-enums)
+set(FLATC_ARGS "${FLATBUFFERS_FLATC_SCHEMA_EXTRA_ARGS}")
 add_subdirectory(vendor/collab-vm-common/vendor/flatbuffers)
 
 # configure libvncserver
@@ -61,9 +64,11 @@ set(COLLABVMSERVER_SOURCES
 	${PROJECT_SOURCE_DIR}/src/Server.h
 	${PROJECT_SOURCE_DIR}/src/Server.cpp
 	
-	
 	${PROJECT_SOURCE_DIR}/src/Protocol.h
 	${PROJECT_SOURCE_DIR}/src/Protocol.cpp
+	
+	${PROJECT_SOURCE_DIR}/src/VMControllers/Common/Surface.h
+	${PROJECT_SOURCE_DIR}/src/VMControllers/Common/Surface.cpp
 
 	${PROJECT_SOURCE_DIR}/src/VMControllers/Common/VNCClient.h
 	${PROJECT_SOURCE_DIR}/src/VMControllers/Common/VNCClient.cpp
@@ -74,11 +79,12 @@ set(COLLABVMSERVER_SOURCES
 	${PROJECT_SOURCE_DIR}/src/main.cpp
 )
 
+
 # Set up a target to build our flatbuffer schema(s)
 # TODO for Agent: include its schema here
 build_flatbuffers("${PROJECT_SOURCE_DIR}/vendor/collab-vm-common/collabvm.fbs" "${PROJECT_SOURCE_DIR}/vendor/collab-vm-common/" "schema" "" "${PROJECT_BINARY_DIR}" "" "")
 
-add_executable(collab-vm-server ${COLLABVMSERVER_SOURCES} "src/Protocol.h")
+add_executable(collab-vm-server ${COLLABVMSERVER_SOURCES})
 add_dependencies(collab-vm-server schema)
 
 set_property(TARGET collab-vm-server PROPERTY CXX_STANDARD 17)

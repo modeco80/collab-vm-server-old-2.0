@@ -2,7 +2,6 @@
 #include "Common.h"
 #include "Logger.h"
 
-
 namespace CollabVM {
 
 	struct WSSession;
@@ -20,6 +19,7 @@ namespace CollabVM {
 		beast::flat_buffer buffer;
 	};
 
+	// WebSocket server using Boost.Beast.
 	struct WebsocketServer : public std::enable_shared_from_this<WebsocketServer> {
 		friend struct WSSession;
 		friend struct HTTPSession;

@@ -1,12 +1,13 @@
 #include <Common.h>
 #include <Logger.h>
 #include <rfb/rfbclient.h>
+#include "Surface.h"
 
 namespace CollabVM {
 	
 	// Default JPEG quality.
 	// Tuned for a mix of performance and quality.
-	constexpr byte DEFAULT_JPEG_QUALITY = 75;
+	constexpr byte DEFAULT_JPEG_QUALITY = 65;
 
 	// Options that the VNC Client can be configured to use.
 	struct VNCClientOptions {
@@ -27,9 +28,9 @@ namespace CollabVM {
 
 		// Set this to true if you want to register the QEMU audio extension.
 		//
-		// Please note that registering the extension is *not* the same
-		// as requiring the extension; the client extension is only
-		// invoked if requested. 
+		// Please note that registering the extension is *not* the same as requiring the extension; 
+		// the client extension is only invoked if requested. 
+		//
 		// If you encounter a problematic VNC server, this can be turned off; 
 		// however, I have doubts that many VNC servers
 		// would be problematic or stupid enough to clobber over this extension.
@@ -48,7 +49,7 @@ namespace CollabVM {
 		} output_region_type;
 
 		// JPEG region compression quality.
-		// This field is only applicable if output_region_type is JpegRegion.
+		// This field is only applicable if output_region_type is JpegRegion, and is ignored otherwise.
 		byte jpeg_compression_quality;
 
 	};
@@ -70,6 +71,17 @@ namespace CollabVM {
 		std::vector<byte> data;
 	};
 
+	struct VNCCursor {
+		// The width and height of the region.
+		int16 width;
+		int16 height;
+
+		// Cursor surface. It's up to the user of this client
+		// to figure out what to do with the surface
+		// (I mean, to be fair, cursors could be sent uncompressed.)
+		Surface& surface;
+	};
+
 	// VNC Client object.
 	struct VNCClient : public std::enable_shared_from_this<VNCClient> {
 
@@ -79,11 +91,15 @@ namespace CollabVM {
 			Connected
 		};
 
+		~VNCClient();
 
+		// "asynchronously" start connecting to the VNC server.
+		// Spawns a new thread.
 		void Connect();
 
 		void SetOptions(VNCClientOptions& new_options);
 	
+		// returns current state
 		inline State GetState() {
 			// State is modified by the client thread.
 			std::lock_guard<std::mutex> l(state_lock);
@@ -92,15 +108,22 @@ namespace CollabVM {
 
 
 		// Function callbacks.
+		// These run on the VNC client thread
+
 		std::function<void()> OnConnect;
 		std::function<void()> OnClose;
 		std::function<void(std::shared_ptr<VNCRegion>)> OnScreenUpdate;
+
+		// cursor is bound to be small (128*128 max is sensible)
+		// so we don't handle encoding it ourselves.
+		std::function<void(std::shared_ptr<VNCCursor>)> OnCursorUpdate;
 
 	private:
 
 		void ClientThread();
 		
-		// 
+		// lock controlling state,
+		// this should be renamed as it's client wide
 		std::mutex state_lock;
 
 		std::thread vnc_thread;
@@ -113,12 +136,11 @@ namespace CollabVM {
 		// libvncclient client object
 		rfbClient* client;
 		
-		// Display width/height
-		int display_width;
-		int display_height;
+		// Cursor surface
+		Surface cursor;
 
-		// Display buffer.
-		std::vector<byte> buffer;
+		// desktop surface
+		Surface desktop;
 		
 		Logger logger = Logger::GetLogger("VNCClient");
 	};

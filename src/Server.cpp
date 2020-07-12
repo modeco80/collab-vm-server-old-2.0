@@ -1,6 +1,9 @@
 #include "Server.h"
 #include "User.h"
 
+// Protocol functions
+#include "Protocol.h"
+
 namespace CollabVM {
 	
 	Server::~Server() {
@@ -59,6 +62,10 @@ namespace CollabVM {
 	}
 
 	void Server::OnMessage(BaseServer::handle_type handle, BaseServer::message_type message) {
+		// Return immediately if the message isn't a binary message.
+		if(!message->binary)
+			return;
+
 		AddWork(std::make_shared<WSMessageWork>(handle, message));
 	}
 
@@ -212,9 +219,9 @@ namespace CollabVM {
 					WSMessageWork* msg = (WSMessageWork*)action.get();
 					auto user = users.find(msg->handle)->second;
 
-					// TODO:
+					// try to deserialize a message..
+					auto message = Protocol::DeserializeMessage(msg->message);
 					
-					logger.info("message: ", beast::buffers_to_string(msg->message->buffer.data()));
 
 					msg->message.reset();
 				} break;

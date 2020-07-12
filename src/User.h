@@ -1,21 +1,9 @@
 #pragma once
 #include "Common.h"
 #include "WebsocketServer.h"
+#include <collabvm_generated.h> // For UserType
 
 namespace CollabVM {
-
-	// enum for user type
-	// NOTE: This enum must be synced with the flatbuffers one!
-	enum class UserType : byte {
-		// A guest user.
-		Guest,
-
-		// A registered user.
-		Registered,
-
-		// An administrator.
-		Admin
-	};
 
 	// Per-IP address data
 	struct IPData {

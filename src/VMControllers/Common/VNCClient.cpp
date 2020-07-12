@@ -9,8 +9,13 @@ namespace CollabVM {
 
 	// Key for user data to store the pointer to the active VNC client.
 	// This is used so that all of the libvncserver code can access the VNCClient object it's tied to.
-	// (I'm waiting for people to call me cheeky)
+	// (I'm waiting for people to call me cheeky :P)
 	const static uint32 VNCCLIENT_KEY = 0x796C694C;
+
+	VNCClient::~VNCClient() {
+		if(client)
+			rfbClientCleanup(client);
+	}
 
 	void VNCClient::Connect() {
 		// Connect() simply starts the thread.
@@ -49,6 +54,7 @@ namespace CollabVM {
 			// Initalization succedded
 
 			client->canHandleNewFBSize = true;
+			// TODO: actually do stuff :P
 		} else {
 			// client initalization failed
 			SetState(State::Disconnected);

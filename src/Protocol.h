@@ -3,9 +3,12 @@
 #include <WebsocketServer.h>
 
 
-namespace CollabVM {
+namespace CollabVM::Protocol {
 
 	// Read a message from a WebSocket message buffer.
-	const CollabVM::Message* ReadMessageFromBuffer(std::shared_ptr<WSMessage> message);
+	CollabVM::MessageT DeserializeMessage(std::shared_ptr<CollabVM::WSMessage> message);
+
+	// Serialize message to a byte array.
+	std::vector<CollabVM::byte> SerializeMessage(CollabVM::MessageT& message);
 
 }
