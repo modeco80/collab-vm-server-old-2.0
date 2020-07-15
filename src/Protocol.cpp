@@ -9,8 +9,9 @@
 #undef GetMessage
 #endif
 
-#include <collabvm_generated.h>
 #include <WebsocketServer.h>
+
+#include <collabvm_generated.h>
 
 namespace CollabVM::Protocol {
 

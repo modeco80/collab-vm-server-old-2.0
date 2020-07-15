@@ -4,14 +4,15 @@
 namespace CollabVM {
 
 	// Simple logger class
-	// Shamelessly plagarized from let's play
+	// Shamelessly plagarized from let's play,
+	// modified to allow multiple channels 
 
 	struct Logger {
 
 		// get a logger channel
-		static Logger GetLogger(std::string group_name) {
+		static Logger GetLogger(std::string channel) {
 			Logger l;
-			l.group_name = group_name;
+			l.channel_name = channel;
 			return l;
 		}
 
@@ -25,7 +26,7 @@ namespace CollabVM {
 		inline void info(const T value, Args... args) {
 			std::lock_guard<std::mutex> lock(mutex);
 			std::ostringstream ss;
-			ss << TimestampString() << "[" << group_name << "/INFO] " << Stringify(value, args...) << '\n';
+			ss << TimestampString() << "[" << channel_name << "/INFO] " << Stringify(value, args...) << '\n';
 			std::cout << ss.str();
 			ss.clear();
 		}
@@ -34,7 +35,7 @@ namespace CollabVM {
 		inline void warn(const T value, Args... args) {
 			std::lock_guard<std::mutex> lock(mutex);
 			std::ostringstream ss;
-			ss << TimestampString() << "[" << group_name << "/WARNING] " << Stringify(value, args...) << '\n';
+			ss << TimestampString() << "[" << channel_name << "/WARNING] " << Stringify(value, args...) << '\n';
 			std::cout << ss.str();
 			ss.clear();
 		}
@@ -43,7 +44,7 @@ namespace CollabVM {
 		inline void error(const T value, Args... args) {
 			std::lock_guard<std::mutex> lock(mutex);
 			std::ostringstream ss;
-			ss << TimestampString() << "[" << group_name << "/ERROR] " << Stringify(value, args...) << '\n';
+			ss << TimestampString() << "[" << channel_name << "/ERROR] " << Stringify(value, args...) << '\n';
 			std::cout << ss.str();
 			ss.clear();
 		}
@@ -55,7 +56,7 @@ namespace CollabVM {
 				return;
 			std::lock_guard<std::mutex> lock(mutex);
 			std::ostringstream ss;
-			ss << TimestampString() << "[" << group_name << "/VERBOSE] " << Stringify(value, args...) << '\n';
+			ss << TimestampString() << "[" << channel_name << "/VERBOSE] " << Stringify(value, args...) << '\n';
 			std::cout << ss.str();
 			ss.clear();
 		}
@@ -67,7 +68,7 @@ namespace CollabVM {
 		}
 
 		inline Logger(Logger&& c) {
-			this->group_name = c.group_name;
+			this->channel_name = c.channel_name;
 		}
 
 		static std::string TimestampString() {
@@ -105,7 +106,7 @@ namespace CollabVM {
 			string += str;
 		}
 
-		std::string group_name;
+		std::string channel_name;
 		std::mutex mutex;
 	};
 

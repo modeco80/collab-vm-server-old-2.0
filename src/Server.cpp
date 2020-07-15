@@ -24,15 +24,6 @@ namespace CollabVM {
 	void Server::Stop() {
 		StopWorking = true;
 		BaseServer::Stop();
-
-		// clean up everything in the server we can,
-		// even if we don't have to clean it up
-		std::lock_guard<std::mutex> ulock(UsersLock);
-		std::lock_guard<std::mutex> ilock(IPDataLock);
-
-		for (auto& user : users)
-			if (user.second)
-				user.second.reset();
 	}
 
 
@@ -40,14 +31,16 @@ namespace CollabVM {
 
 		auto subprotocols = handle->GetSubprotocols();
 
+		// Only allow "cvm2" subprotocol
 		for(auto subprotocol : subprotocols) {
 			if(subprotocol == "cvm2") {
 				auto addr = handle->GetAddress();
 
-				if (FindIPData(addr) == nullptr)
+				if(FindIPData(addr) == nullptr)
 					CreateIPData(addr);
 
-				IPData* data = FindIPData(addr);
+				std::shared_ptr<IPData> data = FindIPData(addr);
+
 				data->connection_count++;
 
 				return true;
@@ -62,7 +55,8 @@ namespace CollabVM {
 	}
 
 	void Server::OnMessage(BaseServer::handle_type handle, BaseServer::message_type message) {
-		// Return immediately if the message isn't a binary message.
+		// Return immediately if the message isn't a binary message, since we don't care for
+		// text WS messages.
 		if(!message->binary)
 			return;
 
@@ -73,27 +67,34 @@ namespace CollabVM {
 		AddWork(std::make_shared<ConnectionRemoveWork>(handle));
 	}
 
-	IPData* Server::FindIPData(net::ip::address& address) {
+	std::shared_ptr<IPData> Server::FindIPData(net::ip::address& address) {
 		std::lock_guard<std::mutex> lock(IPDataLock);
 
 		if(address.is_v4()) {
 			auto v4addr = address.to_v4();
 			auto it = ipv4data.find(v4addr.to_uint());
+
 			if (it == ipv4data.end())
 				return nullptr;
+
 			return it->second;
 		} else if(address.is_v6()) {
 			auto v6addr = address.to_v6();
+
 			if(v6addr.is_v4_mapped()) {
 				auto v4addr = address.to_v6().to_v4();
 				auto it = ipv4data.find(v4addr.to_uint());
+
 				if (it == ipv4data.end())
 					return nullptr;
+
 				return it->second;
 			} else {
 				auto it = ipv6data.find(v6addr.to_bytes());
+
 				if (it == ipv6data.end())
 					return nullptr;
+
 				return it->second;
 			}
 		}
@@ -106,33 +107,35 @@ namespace CollabVM {
 		if(address.is_v4()) {
 			auto v4addr = address.to_v4();
 			uint32 ip = v4addr.to_uint();
-			ipv4data[ip] = new IPData(address);
+
+			ipv4data[ip] = std::make_shared<IPData>(address);
 		} else if(address.is_v6()) {
 			auto v6addr = address.to_v6();
+
 			if(v6addr.is_v4_mapped()) {
 				auto v4addr = address.to_v6().to_v4();
 				uint32 ip = v4addr.to_uint();
-				ipv4data[ip] = new IPData(address);
+				ipv4data[ip] = std::make_shared<IPData>(address);
 			} else {
 				auto ip = v6addr.to_bytes();
-				ipv6data[ip] = new IPData(address);
+				ipv6data[ip] = std::make_shared<IPData>(address);
 			}
+
 		}
 	}
 
 	void Server::CleanupIPData() {
 		std::lock_guard<std::mutex> lock(IPDataLock);
-
+		
 		auto ipv4it = ipv4data.begin();
 		while(ipv4it != ipv4data.end()) {
-			IPData* ipData = ipv4it->second;
+			auto ipData = ipv4it->second;
 
 			if(ipData) {
 				if(ipData->SafeToDelete()) {
 					logger.verbose("Erasing IPData for ", ipData->str() , " @ ", &ipData);
 
 					auto addr = ipData->address;
-					delete ipData;
 					ipv4data.erase(ipv4data.find(addr.to_v4().to_uint()));
 					ipv4it = ipv4data.begin();
 					continue;
@@ -143,14 +146,13 @@ namespace CollabVM {
 
 		auto ipv6it = ipv6data.begin();
 		while(ipv6it != ipv6data.end()) {
-			IPData* ipData = ipv6it->second;
+			auto ipData = ipv6it->second;
 
 			if(ipData) {
 				if(ipData->SafeToDelete()) {
 					logger.verbose("Erasing IPData for ", ipData->str() , " @ ", &ipData);
 
 					auto addr = ipData->address;
-					delete ipData;
 					ipv6data.erase(ipv6data.find(addr.to_v6().to_bytes()));
 					ipv6it = ipv6data.begin();
 					continue;
@@ -185,7 +187,7 @@ namespace CollabVM {
 					ConnectionAddWork* add = (ConnectionAddWork*)action.get();
 					auto address = add->handle->GetAddress();
 
-					IPData* data = FindIPData(address);
+					std::shared_ptr<IPData> data = FindIPData(address);
 					
 					// create user structure
 					users[add->handle] = std::make_shared<User>(add->handle, data);
@@ -200,7 +202,7 @@ namespace CollabVM {
 					if(it == users.end())
 						break; // stop but still free the action memory
 
-					IPData* data = FindIPData(it->second->ipData->address);
+					std::shared_ptr<IPData> data = FindIPData(it->second->ipData->address);
 
 					// decrement connection count in IPData
 					if(data)

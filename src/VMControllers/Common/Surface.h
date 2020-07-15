@@ -10,7 +10,8 @@ namespace CollabVM {
 		BPP32
 	};
 
-	// Surface
+	// Surface wrapper object over Cairo surfaces
+	// and memory.
 	struct Surface {
 
 		inline Surface() {
@@ -47,16 +48,18 @@ namespace CollabVM {
 
 	private:
 
-
+		// width
 		uint16 width;
 
+		// height
 		uint16 height;
 
 		SurfaceFormat format;
 
-		// the buffer that this surface compreises of
+		// the buffer that this surface uses
 		std::vector<byte> buffer;
 
+		// cairo surface object
 		cairo_surface_t* surface;
 	};
 

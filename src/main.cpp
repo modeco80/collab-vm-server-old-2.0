@@ -3,6 +3,11 @@
 #include "Server.h"
 #include "Logger.h"
 
+#ifdef COLLABVM_LINUX
+	#define BOOST_STACKTRACE_USE_BACKTRACE
+#endif
+
+#include <boost/stacktrace.hpp>
 #include <boost/program_options.hpp>
 
 using namespace CollabVM;
@@ -18,6 +23,8 @@ net::io_service ioc;
 std::shared_ptr<net::io_service::work> work;
 std::shared_ptr<Server> server;
 
+constexpr static char dumpfile[] = "./Server_Stacktrace.dmp";
+
 Logger mainlogger = Logger::GetLogger("Main");
 
 void StopServer() {
@@ -27,12 +34,25 @@ void StopServer() {
 	server.reset();
 }
 
+void SignalHandler(boost::system::error_code ec, int sig) {
+	if(sig == SIGSEGV || sig == SIGABRT) {
+		boost::stacktrace::safe_dump_to(dumpfile);
+		raise(SIGABRT);
+		return;
+	}
+
+	StopServer();
+}
+
 template<typename F>
 inline void Worker(F function) {
 	try {
 		function();
 	} catch(std::exception& ex) {
+		// Get the stack trace as early as possible so we have a "pristine" one
+		auto stacktrace = boost::stacktrace::stacktrace();
 		mainlogger.error("Got exception: ", ex.what());
+		mainlogger.error("Stack trace:", stacktrace);
 		StopServer();
 	}
 }
@@ -66,7 +86,7 @@ int main(int argc, char** argv) {
 		std::stringstream builder;
 		builder << "CollabVM 2.0 Server\n";
 		builder << "(C) 2020 Lily (Computernewb Development Team)\n\n";
-		builder << "Versions of Third Party Libraries:\n";
+		builder << "Third Party Libraries:\n";
 		builder << "Boost C++ Version " << (BOOST_VERSION / 100000) << '.' <<  (BOOST_VERSION / 100 % 1000) << '.' << (BOOST_VERSION % 100) << '\n';
 		builder << "ASIO (Boost) Version " << (BOOST_ASIO_VERSION / 100000) << '.' <<  (BOOST_ASIO_VERSION / 100 % 1000) << '.' << (BOOST_ASIO_VERSION % 100) << '\n';
 		std::cout << builder.str();
@@ -76,13 +96,13 @@ int main(int argc, char** argv) {
 	if(vm.count("listen")) {
 		try {
 			laddr = vm["listen"].as<std::string>();
+			address = net::ip::make_address(laddr);
 		} catch(...) {
 			std::cout << "Invalid listen address\n";
 			return 1;
 		}
 	}
 
-	address = net::ip::make_address(laddr);
 
 	if(vm.count("port")) {
 		try {
@@ -100,6 +120,9 @@ int main(int argc, char** argv) {
 	work = std::make_shared<net::io_service::work>(ioc);
 	server = std::make_shared<Server>(ioc);
 
+	net::signal_set signal(ioc, SIGINT, SIGABRT, SIGSEGV);
+	signal.async_wait(SignalHandler);
+
 	std::thread thread([]() {
 		Worker([]() {
 			ioc.run();
@@ -113,6 +136,5 @@ int main(int argc, char** argv) {
 
 	thread.join();
 
-	StopServer();
 	return 0;
 }

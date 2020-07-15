@@ -103,6 +103,18 @@ namespace CollabVM {
 	}
 
 	void WSSession::Send(WebsocketServer::message_type message) {
+		if(!message) {
+			// NOTE: If this happens, there's probably a lot more wrong, but instead of crashing on this
+			// we'll crash on what might actually be breaking
+			logger.verbose("message is null!");
+			return;
+		}
+
+		if(message->buffer.size() == 0) {
+			logger.verbose("Refusing to send empty message");
+			return;
+		}
+
 		if (message->binary)
 			stream.binary(true);
 		else
@@ -169,8 +181,7 @@ namespace CollabVM {
 
 				session->Run(req);
 			} else {
-				// TODO: implement a basic static file host. (NOTE: make sure to allow chunk/resume stuff?
-				// (above todo may be discarded..)
+				// TODO I need to see why http request bombing breaks the server
 				auto target = req.target();
 				auto address = stream.socket().remote_endpoint().address().to_string();
 				http::response<http::string_body> res;

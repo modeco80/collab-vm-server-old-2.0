@@ -1,7 +1,10 @@
 #pragma once
+// Common header.
+// NOTE: This is PCH'd, so be careful what you put here
 
 #include <ctime>
 #include <iostream>
+#include <fstream>
 #include <cstdint>
 #include <map>
 #include <deque>
@@ -9,6 +12,7 @@
 #include <mutex>
 #include <thread>
 #include <functional>
+#include <filesystem>
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
@@ -38,6 +42,7 @@ namespace CollabVM {
 		if(func)
 			func(std::forward(args)...);
 	}
+
 }
 
 
@@ -50,9 +55,20 @@ namespace CollabVM {
 #endif
 #endif
 
+#ifdef _WIN32
+#define COLLABVM_WINDOWS
+#elif defined(__linux__)
+#define COLLABVM_LINUX
+#else
+#endif
+
+
 // Boost
+// TODO: move this to places that need it
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
+
+namespace fs = std::filesystem;
 
 namespace net = boost::asio;
 namespace beast = boost::beast;
@@ -61,13 +77,3 @@ namespace http = beast::http;
 namespace ws = beast::websocket;
 
 using tcp = net::ip::tcp;
-
-
-namespace CollabVM {
-	// So we don't have to include the filesystem library just to get this constant.
-#ifdef _WIN32
-	constexpr char PlatformDirSeperator = '\\';
-#else
-	constexpr char PlatformDirSeperator = '/';
-#endif
-}

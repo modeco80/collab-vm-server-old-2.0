@@ -94,11 +94,13 @@ namespace CollabVM {
 	private:
 		void ProcessActions();
 
-		IPData* FindIPData(net::ip::address& address);
+		std::shared_ptr<IPData> FindIPData(net::ip::address& address);
 
 		void CreateIPData(net::ip::address& address);
 
 		void CleanupIPData();
+
+		//void OnVMControllerStateChange();
 
 		inline void StartIPDataTimer() {
 			IPDataCleanupTimer.expires_after(net::steady_timer::duration(IPDataTimeout));
@@ -129,13 +131,12 @@ namespace CollabVM {
 
 		net::steady_timer IPDataCleanupTimer;
 
-		// TODO: make thse shared_ptrs along with *everything* else
 
 		// IPv4 IPData
-		std::map<uint64, IPData*> ipv4data;
+		std::map<uint64, std::shared_ptr<IPData>> ipv4data;
 		
 		// IPv6 IPData
-		std::map<std::array<byte, 16>, IPData*> ipv6data;
+		std::map<std::array<byte, 16>, std::shared_ptr<IPData>> ipv6data;
 
 		
 		std::mutex UsersLock;
