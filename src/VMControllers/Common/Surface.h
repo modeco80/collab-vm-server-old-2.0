@@ -34,6 +34,8 @@ namespace CollabVM {
 		// draw the contents of another surface onto this one.
 		// Essentially a blit without any form of ROP
 		void Draw(Surface& Other, uint16 x, uint16 y, uint16 width, uint16 height);
+
+		void Draw(std::vector<byte>& Other, uint16 x, uint16 y, uint16 width, uint16 height);
 		
 		// retun the raw cairo surface this wraps
 		inline cairo_surface_t* Raw() {
@@ -53,6 +55,8 @@ namespace CollabVM {
 
 		// height
 		uint16 height;
+
+		uint32 stride;
 
 		SurfaceFormat format;
 

@@ -36,6 +36,8 @@ void StopServer() {
 
 void SignalHandler(boost::system::error_code ec, int sig) {
 	if(sig == SIGSEGV || sig == SIGABRT) {
+		// We can't really print to the console,
+		// so we dump the stack trace to a file.
 		boost::stacktrace::safe_dump_to(dumpfile);
 		raise(SIGABRT);
 		return;

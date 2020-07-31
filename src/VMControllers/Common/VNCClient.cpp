@@ -12,6 +12,11 @@ namespace CollabVM {
 	// (I'm waiting for people to call me cheeky :P)
 	const static uint32 VNCCLIENT_KEY = 0x796C694C;
 
+	//called to resize the
+	rfbBool ResizeSurface() {
+	
+	}
+
 	VNCClient::~VNCClient() {
 		if(client)
 			rfbClientCleanup(client);
@@ -54,6 +59,7 @@ namespace CollabVM {
 			// Initalization succedded
 
 			client->canHandleNewFBSize = true;
+			
 			// TODO: actually do stuff :P
 		} else {
 			// client initalization failed

@@ -87,7 +87,7 @@ namespace CollabVM {
 			
 			// made static so that this won't happen every single call
 			// (since that would be slow) and instead on the first call to GenerateGuestName
-			const static std::uniform_int_distribution<int> dist(0, MaxID);
+			static std::uniform_int_distribution<int> dist(0, MaxID);
 			static std::mt19937 mt(std::chrono::high_resolution_clock::now().time_since_epoch().count());
 
 			auto str = std::to_string(dist(mt));
@@ -95,11 +95,11 @@ namespace CollabVM {
 			std::stringstream ss;
 			ss << NamePrefix << str;
 			
-			// TODO: There's probably a better way of doing this, 
+			// TODO: There's probably a far better way of doing this, 
 			// but it's the most relatively cheapest way and it works,
 			// so whatever.
 
-			// pad names too small (under or at 3 characters) with additional zeroes 
+			// Pad names too small (under or at 3 characters) with additional zeroes 
 			// example `guest202` to `guest20200`
 			if(str.size() <= 3) {
 				const auto pad_count = 5 - str.size();

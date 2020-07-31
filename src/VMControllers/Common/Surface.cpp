@@ -3,6 +3,7 @@
 
 namespace CollabVM {
 
+
 	Surface::~Surface() {
 		// Destroy the Cairo surface
 		if(surface)
@@ -30,7 +31,7 @@ namespace CollabVM {
 
 		}
 
-		auto stride = cairo_format_stride_for_width(cairo_format, width);
+		stride = cairo_format_stride_for_width(cairo_format, width);
 		buffer.resize(width*height*stride);
 		surface = cairo_image_surface_create_for_data(buffer.data(), cairo_format, width, height, stride);
 

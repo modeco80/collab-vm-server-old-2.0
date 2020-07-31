@@ -3,6 +3,7 @@
 #include "User.h"
 #include "WebsocketServer.h"
 #include "Logger.h"
+#include "VMControllers/Common/VMController.h"
 
 namespace CollabVM {
 	
@@ -143,6 +144,9 @@ namespace CollabVM {
 
 		// Map of handles to users
 		std::map<WebsocketServer::handle_type, std::shared_ptr<User>> users;
+
+		std::mutex VMLock;
+		std::map<int, std::shared_ptr<VMController>> vms;
 
 		// logger
 		Logger logger = Logger::GetLogger("CollabVMServer");

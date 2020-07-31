@@ -9,18 +9,20 @@ as it is supported by the Computernewb development team until Feburary 2021.
 ## Building
 
 ### Requirements
- - A *standards-compliant* C++17 compiler (Visual Studio 2019 on Windows, GCC 8.1+ on Linux, Clang 7 and up)
+ - A *standards-compliant* C++17 compiler (Visual Studio 2019 on Windows, GCC 8.1+, Clang 7 and up)
  - Git (to clone the repository)
  - CMake 3.2 and above
 
-First, clone this repository with `--recursive` added to `git clone`. This will fetch all the repository dependencies for you.
+First, clone this repository with `--recursive` added to `git clone`. This will fetch all the repository dependencies for you automagically.
 
 ## Linux
 
 #### Debian/Ubuntu (without vcpkg)
+_Note that this configuration is "supported" but may break._
+
 `sudo apt install libboost-all-dev libcairo2-dev libjpeg-turbo8-dev`
 
-(You may need to use vcpkg if your boost version is too old to have a recent version of Boost.Beast.)
+(You may need to use instead vcpkg if your boost version is too old to have a recent version of Boost.Beast.)
 
 #### Arch (without vcpkg)
 `sudo pacman -S boost boost-libs`
@@ -46,8 +48,8 @@ cmake --build . (or make -j$(nproc) on Linux)
 
 ## Running the server
 
-The collab-vm-server has a `--help` option that displays all options, but here are the more useful ones.
+The collab-vm-server has a `--help` option that displays all options, but listed here are the more useful ones.
 
-* `--verbose`: Enables verbose debug logging. Helpful for troubleshooting.
-* `--port <PORT>`: Selects the port the server will host on. Default is 6004
-* `--listen <ADDR>`: Use this to bind collab-vm-server to run on either only localhost (if proxying) or another interface. Default is `0.0.0.0` (any interface).
+* `--verbose`: Enables verbose console logging. Noisy, but helpful for troubleshooting and debugging.
+* `--port <PORT>`: Selects the port the server will host on. The default is 6004.
+* `--listen <ADDR>`: Use this to bind collab-vm-server to run on either only localhost (if you are going to proxy) or another interface. The default is `0.0.0.0` (any interface/IP address).
