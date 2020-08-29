@@ -84,6 +84,8 @@ namespace CollabVM {
 
 	// VNC Client object.
 	struct VNCClient : public std::enable_shared_from_this<VNCClient> {
+		friend rfbBool ResizeSurface(rfbClient* client);
+		friend void UpdateSurface(rfbClient* client, int x, int y, int w, int h);
 
 		enum class State : byte {
 			Disconnected,
@@ -109,6 +111,8 @@ namespace CollabVM {
 
 		// Function callbacks.
 		// These run on the VNC client thread
+		
+		std::function<void()> OnStateChange;
 
 		std::function<void()> OnConnect;
 		std::function<void()> OnClose;
@@ -128,6 +132,9 @@ namespace CollabVM {
 
 		std::thread vnc_thread;
 
+		// friend members may need this
+	protected:
+
 		State current_state = State::Disconnected;
 
 		// The options that this VNC Client is using.
@@ -141,7 +148,8 @@ namespace CollabVM {
 
 		// desktop surface
 		Surface desktop;
-		
+
+		// logger channel instance
 		Logger logger = Logger::GetLogger("VNCClient");
 	};
 

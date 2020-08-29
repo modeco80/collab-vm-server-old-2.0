@@ -34,6 +34,32 @@ namespace CollabVM {
 			fun(user);
 		}
 
+		inline bool AddUser(std::shared_ptr<User> user) {
+			std::lock_guard<std::mutex> l(lock);
+			bool duplicate = false;
+
+			ForEach([&](auto it) {
+				if (user == *it) {
+					// duplicate user will be added if this goes through
+					duplicate = true;
+					return false;
+				}
+
+				return true;
+			});
+
+			// return if this will cause a duplicate user to be added
+			if(duplicate)
+				return false;
+
+			// insert user
+			users.push_back(user);
+			std::sort(users.begin(), users.end());
+			connected_users++;
+
+			return true;
+		}
+
 		
 		template<class Function>
 		inline void RemoveUser(std::shared_ptr<User> user, Function fun) {
@@ -48,6 +74,25 @@ namespace CollabVM {
 					connected_users--;
 
 					fun();
+					return false;
+				}
+
+				// not found yet
+				return true;
+			});
+		}		
+
+		inline void RemoveUser(std::shared_ptr<User> user) {
+			std::lock_guard<std::mutex> l(lock);
+
+			ForEach([&](auto it) {
+
+				if (user == *it) {
+					// remove if found
+					(*it).reset();
+					users.erase(it);
+					connected_users--;
+
 					return false;
 				}
 

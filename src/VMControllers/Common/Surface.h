@@ -10,7 +10,7 @@ namespace CollabVM {
 		BPP32
 	};
 
-	// Surface wrapper object over Cairo surfaces
+	// Basic wrapper object over Cairo surfaces
 	// and memory.
 	struct Surface {
 
@@ -35,8 +35,6 @@ namespace CollabVM {
 		// Essentially a blit without any form of ROP
 		void Draw(Surface& Other, uint16 x, uint16 y, uint16 width, uint16 height);
 
-		void Draw(std::vector<byte>& Other, uint16 x, uint16 y, uint16 width, uint16 height);
-		
 		// retun the raw cairo surface this wraps
 		inline cairo_surface_t* Raw() {
 			if(surface)

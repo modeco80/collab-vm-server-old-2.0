@@ -39,7 +39,7 @@ namespace CollabVM {
 
 		// Implementation-defined value
 		// to detect VM controller type.
-		const byte Type;
+		const byte Type = 0; // 0 is reserved for the base so that functions can complain
 
 	private:
 

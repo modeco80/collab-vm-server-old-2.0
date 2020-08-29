@@ -119,6 +119,9 @@ else()
 	target_link_libraries(collab-vm-server unofficial::cairo::cairo)
 endif()
 
+
+target_link_libraries(collab-vm-server cairo-jpg)
+
 # Argh, libvncclient CMakeLists doesn't make any usage of target_include_directories
 # so I have to do it myself.
 target_include_directories(collab-vm-server PUBLIC ${PROJECT_SOURCE_DIR}/vendor/libvncserver ${PROJECT_BINARY_DIR}/vendor/libvncserver)
